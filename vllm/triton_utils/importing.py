@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
-import os
 import types
 from importlib.util import find_spec
 
@@ -84,12 +83,8 @@ class TritonPlaceholder(types.ModuleType):
 
         return decorator
 
-
-class TritonLanguagePlaceholder(types.ModuleType):
-
-    def __init__(self):
-        super().__init__("triton.language")
-        self.constexpr = None
-        self.dtype = None
-        self.int64 = None
-        self.int32 = None
+        def __init__(self):
+            super().__init__("triton.language")
+            self.constexpr = None
+            self.dtype = None
+            self.int64 = None
