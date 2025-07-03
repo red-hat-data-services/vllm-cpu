@@ -290,13 +290,15 @@ if (ENABLE_X86_ISA OR (ASIMD_FOUND AND NOT APPLE_SILICON_FOUND) OR POWER9_FOUND 
     set(VLLM_BUILD_TYPE ${CMAKE_BUILD_TYPE})
     set(CMAKE_BUILD_TYPE "Release") # remove oneDNN debug symbols to reduce size
     FetchContent_MakeAvailable(oneDNN)
-    set(CMAKE_BUILD_TYPE ${VLLM_BUILD_TYPE})
-    add_library(dnnl_ext OBJECT "csrc/cpu/dnnl_helper.cpp")
-    target_include_directories(
-        dnnl_ext
-        PUBLIC ${oneDNN_SOURCE_DIR}/include
-        PUBLIC ${oneDNN_BINARY_DIR}/include
-        PRIVATE ${oneDNN_SOURCE_DIR}/src
+    
+    list(APPEND LIBS dnnl)
+elseif(POWER10_FOUND OR POWER9_FOUND)
+    FetchContent_Declare(
+        oneDNN
+        GIT_REPOSITORY https://github.com/oneapi-src/oneDNN.git
+        GIT_TAG v3.7.2
+        GIT_PROGRESS TRUE
+        GIT_SHALLOW TRUE
     )
     target_link_libraries(dnnl_ext dnnl torch)
     target_compile_options(dnnl_ext PRIVATE ${DNNL_COMPILE_FLAGS} -fPIC)
@@ -351,6 +353,21 @@ set(VLLM_EXT_SRC
 if (ASIMD_FOUND AND NOT APPLE_SILICON_FOUND)
     set(VLLM_EXT_SRC
         "csrc/cpu/shm.cpp"
+        ${VLLM_EXT_SRC})
+    if (ENABLE_AVX512BF16 AND ENABLE_AVX512VNNI)
+        set(VLLM_EXT_SRC
+            "csrc/cpu/sgl-kernels/gemm.cpp"
+            "csrc/cpu/sgl-kernels/gemm_int8.cpp"
+            "csrc/cpu/sgl-kernels/gemm_fp8.cpp"
+            "csrc/cpu/sgl-kernels/moe.cpp"
+            "csrc/cpu/sgl-kernels/moe_int8.cpp"
+            "csrc/cpu/sgl-kernels/moe_fp8.cpp"
+            ${VLLM_EXT_SRC})
+        add_compile_definitions(-DCPU_CAPABILITY_AVX512)
+    endif()
+elseif(POWER10_FOUND OR POWER9_FOUND)
+    set(VLLM_EXT_SRC
+        "csrc/cpu/quant.cpp"
         ${VLLM_EXT_SRC})
 endif()
 
