@@ -491,8 +491,12 @@ class OpenAIServing:
                 return default_mm_lora
 
         if self._is_model_supported(request.model):
-            return None
-
+            return None, None
+        if request.model in self.models.lora_requests:
+            return self.models.lora_requests[request.model], None
+        for prompt_adapter in self.models.prompt_adapter_requests:
+            if request.model == prompt_adapter.prompt_adapter_name:
+                return None, prompt_adapter
         # if _check_model has been called earlier, this will be unreachable
         raise ValueError(f"The model `{request.model}` does not exist.")
 
