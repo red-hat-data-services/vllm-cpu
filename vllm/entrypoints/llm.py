@@ -489,8 +489,19 @@ class LLM:
         if sampling_params is None:
             sampling_params = self.get_default_sampling_params()
 
-        return self._run_completion(
-            prompts=prompts,
+        tokenization_kwargs: dict[str, Any] = {}
+        truncate_prompt_tokens = None
+        if isinstance(sampling_params, SamplingParams):
+            truncate_prompt_tokens = sampling_params.truncate_prompt_tokens
+        _validate_truncation_size(self.llm_engine.model_config.max_model_len,
+                                  truncate_prompt_tokens, tokenization_kwargs)
+
+        # Add any modality specific loras to the corresponding prompts
+        lora_request = self._get_modality_specific_lora_reqs(
+            parsed_prompts, lora_request)
+
+        self._validate_and_add_requests(
+            prompts=parsed_prompts,
             params=sampling_params,
             output_type=RequestOutput,
             use_tqdm=use_tqdm,
@@ -510,102 +521,59 @@ class LLM:
     ) -> list[str]:
         """Enqueue prompts for generation without waiting for completion.
 
-        This method adds requests to the engine queue but does not start
-        processing them. Use wait_for_completion() to process the queued
-        requests and get results.
-
-        Args:
-            prompts: The prompts to the LLM. See generate() for details.
-            sampling_params: The sampling parameters for text generation.
-            lora_request: LoRA request to use for generation, if any.
-            priority: The priority of the requests, if any.
-            use_tqdm: If True, shows a tqdm progress bar while adding requests.
-            tokenization_kwargs: Overrides for `tokenizer.encode`.
-
-        Returns:
-            A list of request IDs for the enqueued requests.
-        """
-        runner_type = self.model_config.runner_type
-        if runner_type != "generate":
-            raise ValueError("LLM.enqueue() is only supported for generative models.")
-
-        if sampling_params is None:
-            sampling_params = self.get_default_sampling_params()
-
-        return self._add_completion_requests(
-            prompts=prompts,
-            params=sampling_params,
-            use_tqdm=use_tqdm,
-            lora_request=lora_request,
-            priority=priority,
-            tokenization_kwargs=tokenization_kwargs,
-        )
-
-    @overload
-    def wait_for_completion(
-        self,
-        *,
-        use_tqdm: bool | Callable[..., tqdm] = True,
-    ) -> list[RequestOutput | PoolingRequestOutput]: ...
-
-    @overload
-    def wait_for_completion(
-        self,
-        output_type: type[_O] | tuple[type[_O], ...],
-        *,
-        use_tqdm: bool | Callable[..., tqdm] = True,
-    ) -> list[_O]: ...
-
-    def wait_for_completion(
-        self,
-        output_type: type[Any] | tuple[type[Any], ...] | None = None,
-        *,
-        use_tqdm: bool | Callable[..., tqdm] = True,
-    ) -> list[Any]:
-        """Wait for all enqueued requests to complete and return results.
-
-        This method processes all requests currently in the engine queue
-        and returns their outputs. Use after enqueue() to get results.
-
-        Args:
-            output_type: The expected output type, defaults to RequestOutput.
-            use_tqdm: If True, shows a tqdm progress bar.
-
-        Returns:
-            A list of output objects for all completed requests.
-        """
-        if output_type is None:
-            output_type = (RequestOutput, PoolingRequestOutput)
-
-        return self._run_engine(output_type, use_tqdm=use_tqdm)
-
-    def _resolve_mm_lora(
-        self,
-        prompt: ProcessorInputs,
-        lora_request: LoRARequest | None,
-    ) -> LoRARequest | None:
-        if prompt["type"] != "multimodal":
-            return lora_request
-
+    def _get_modality_specific_lora_reqs(
+            self, parsed_prompts: Union[PromptType, Sequence[PromptType]],
+            lora_request: Optional[Union[list[LoRARequest], LoRARequest]]):
+        # Grab the lora config off the vllm config on the engine,
+        # since this is the same for both v0 & v1.
         lora_config = self.llm_engine.vllm_config.lora_config
-        default_mm_loras = None if lora_config is None else lora_config.default_mm_loras
-        if not default_mm_loras:
+
+        # If there's no lora config / default_mm_loras, or the model
+        # isn't multimodal, leave the lora as is.
+        if (lora_config is None
+                or not self.llm_engine.model_config.is_multimodal_model
+                or (lora_config and lora_config.default_mm_loras is None)):
             return lora_request
 
-        prompt_modalities = prompt["mm_placeholders"].keys()
-        intersection = set(prompt_modalities).intersection(default_mm_loras.keys())
+        if not isinstance(parsed_prompts, Sequence):
+            parsed_prompts = [parsed_prompts]
+
+        optional_loras = ([lora_request] * len(parsed_prompts)
+                          if not isinstance(lora_request, Sequence) else
+                          lora_request)
+
+        return [
+            self._resolve_single_prompt_mm_lora(
+                parsed_prompt,
+                opt_lora_req,
+                lora_config.default_mm_loras,
+            ) for parsed_prompt, opt_lora_req in zip(parsed_prompts,
+                                                     optional_loras)
+        ]
+
+    def _resolve_single_prompt_mm_lora(self, parsed_prompt: PromptType,
+                                       lora_request: Optional[LoRARequest],
+                                       default_mm_loras: Optional[dict[str,
+                                                                       str]]):
+        if (not default_mm_loras or not isinstance(parsed_prompt, dict)
+                or "multi_modal_data" not in parsed_prompt):
+            return lora_request
+
+        parsed_prompt = cast(Union[TextPrompt, TokensPrompt], parsed_prompt)
+
+        intersection = set(
+            parsed_prompt["multi_modal_data"].keys()).intersection(
+                default_mm_loras.keys())
         if not intersection:
             return lora_request
-
         if len(intersection) > 1:
             # TODO: Would be nice to be able to have multiple loras per prompt
             logger.warning(
-                "Multiple modality specific loras were registered and would be "
-                "used by a single prompt consuming several modalities; "
-                "currently we only support one lora per request; as such, "
-                "lora(s) registered with modalities: %s will be skipped",
-                intersection,
-            )
+                "Multiple modality specific loras were registered and would be"
+                " used by a single prompt consuming several modalities; "
+                " currently we only support one lora per request; as such,"
+                " lora(s) registered with modalities: %s"
+                " will be skipped", intersection)
             return lora_request
 
         # Build the LoRA request; the ID of the default mm lora is the
@@ -621,8 +589,7 @@ class LLM:
                 logger.warning(
                     "A modality with a registered lora and a lora_request "
                     "with a different ID were provided; falling back to the "
-                    "lora_request as we only apply one LoRARequest per prompt"
-                )
+                    "lora_request as we only apply one LoRARequest per prompt")
             return lora_request
 
         return LoRARequest(
@@ -631,13 +598,11 @@ class LLM:
             modality_lora_path,
         )
 
-    def collective_rpc(
-        self,
-        method: str | Callable[..., _R],
-        timeout: float | None = None,
-        args: tuple = (),
-        kwargs: dict[str, Any] | None = None,
-    ) -> list[_R]:
+    def collective_rpc(self,
+                       method: Union[str, Callable[..., _R]],
+                       timeout: Optional[float] = None,
+                       args: tuple = (),
+                       kwargs: Optional[dict[str, Any]] = None) -> list[_R]:
         """
         Execute an RPC call on all workers.
 

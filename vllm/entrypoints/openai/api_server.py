@@ -28,31 +28,55 @@ from vllm.engine.protocol import EngineClient
 from vllm.entrypoints.chat_utils import load_chat_template
 from vllm.entrypoints.launcher import serve_http
 from vllm.entrypoints.logger import RequestLogger
-from vllm.entrypoints.openai.cli_args import make_arg_parser, validate_parsed_serve_args
-from vllm.entrypoints.openai.engine.protocol import GenerationError
-from vllm.entrypoints.openai.models.protocol import BaseModelPath
-from vllm.entrypoints.openai.models.serving import OpenAIServingModels
-from vllm.entrypoints.openai.server_utils import (
-    engine_error_handler,
-    exception_handler,
-    generation_error_handler,
-    get_uvicorn_log_config,
-    http_exception_handler,
-    lifespan,
-    log_response,
-    validation_exception_handler,
-)
-from vllm.entrypoints.sagemaker.api_router import sagemaker_standards_bootstrap
-from vllm.entrypoints.serve.elastic_ep.middleware import (
-    ScalingMiddleware,
-)
-from vllm.entrypoints.serve.tokenize.serving import OpenAIServingTokenization
-from vllm.entrypoints.utils import (
-    cli_env_setup,
-    log_non_default_args,
-    log_version_and_model,
-    process_lora_modules,
-)
+from vllm.entrypoints.openai.cli_args import (log_non_default_args,
+                                              make_arg_parser,
+                                              validate_parsed_serve_args)
+# yapf conflicts with isort for this block
+# yapf: disable
+from vllm.entrypoints.openai.protocol import (ChatCompletionRequest,
+                                              ChatCompletionResponse,
+                                              ClassificationRequest,
+                                              ClassificationResponse,
+                                              CompletionRequest,
+                                              CompletionResponse,
+                                              DetokenizeRequest,
+                                              DetokenizeResponse,
+                                              EmbeddingChatRequest,
+                                              EmbeddingCompletionRequest,
+                                              EmbeddingRequest,
+                                              EmbeddingResponse, ErrorResponse,
+                                              LoadLoRAAdapterRequest,
+                                              PoolingChatRequest,
+                                              PoolingCompletionRequest,
+                                              PoolingRequest, PoolingResponse,
+                                              RerankRequest, RerankResponse,
+                                              ScoreRequest, ScoreResponse,
+                                              TokenizeRequest,
+                                              TokenizeResponse,
+                                              TranscriptionRequest,
+                                              TranscriptionResponse,
+                                              TranslationRequest,
+                                              TranslationResponse,
+                                              UnloadLoRAAdapterRequest)
+# yapf: enable
+from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
+from vllm.entrypoints.openai.serving_classification import (
+    ServingClassification)
+from vllm.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from vllm.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
+from vllm.entrypoints.openai.serving_engine import OpenAIServing
+from vllm.entrypoints.openai.serving_models import (BaseModelPath,
+                                                    LoRAModulePath,
+                                                    OpenAIServingModels)
+from vllm.entrypoints.openai.serving_pooling import OpenAIServingPooling
+from vllm.entrypoints.openai.serving_score import ServingScores
+from vllm.entrypoints.openai.serving_tokenization import (
+    OpenAIServingTokenization)
+from vllm.entrypoints.openai.serving_transcription import (
+    OpenAIServingTranscription, OpenAIServingTranslation)
+from vllm.entrypoints.openai.tool_parsers import ToolParserManager
+from vllm.entrypoints.utils import (cli_env_setup, load_aware_call,
+                                    with_cancellation)
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParserManager
 from vllm.tasks import POOLING_TASKS, SupportedTask
@@ -359,10 +383,28 @@ async def init_app_state(
     )
     lora_modules = process_lora_modules(args.lora_modules, default_mm_loras)
 
+    # Merge default_mm_loras into the static lora_modules
+    default_mm_loras = (vllm_config.lora_config.default_mm_loras
+                        if vllm_config.lora_config is not None else {})
+
+    lora_modules = args.lora_modules
+    if default_mm_loras:
+        default_mm_lora_paths = [
+            LoRAModulePath(
+                name=modality,
+                path=lora_path,
+            ) for modality, lora_path in default_mm_loras.items()
+        ]
+        if args.lora_modules is None:
+            lora_modules = default_mm_lora_paths
+        else:
+            lora_modules += default_mm_lora_paths
+
     state.openai_serving_models = OpenAIServingModels(
         engine_client=engine_client,
         base_model_paths=base_model_paths,
         lora_modules=lora_modules,
+        prompt_adapters=args.prompt_adapters,
     )
     await state.openai_serving_models.init_static_loras()
     state.openai_serving_tokenization = OpenAIServingTokenization(
