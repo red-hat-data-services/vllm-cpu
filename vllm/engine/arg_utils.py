@@ -515,8 +515,14 @@ class EngineArgs:
     # LoRA fields
     enable_lora: bool = False
     max_loras: int = LoRAConfig.max_loras
+<<<<<<< HEAD
     max_lora_rank: MaxLoRARanks = LoRAConfig.max_lora_rank
     default_mm_loras: dict[str, str] | None = LoRAConfig.default_mm_loras
+=======
+    max_lora_rank: int = LoRAConfig.max_lora_rank
+    default_mm_loras: Optional[Dict[str, str]] = \
+        LoRAConfig.default_mm_loras
+>>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
     fully_sharded_loras: bool = LoRAConfig.fully_sharded_loras
     max_cpu_loras: int | None = LoRAConfig.max_cpu_loras
     lora_dtype: str | torch.dtype | None = LoRAConfig.lora_dtype
@@ -1134,9 +1140,26 @@ class EngineArgs:
             "--lora-dtype",
             **lora_kwargs["lora_dtype"],
         )
+<<<<<<< HEAD
         lora_group.add_argument(
             "--enable-tower-connector-lora",
             **lora_kwargs["enable_tower_connector_lora"],
+=======
+        lora_group.add_argument("--long-lora-scaling-factors",
+                                **lora_kwargs["long_lora_scaling_factors"])
+        lora_group.add_argument("--max-cpu-loras",
+                                **lora_kwargs["max_cpu_loras"])
+        lora_group.add_argument("--fully-sharded-loras",
+                                **lora_kwargs["fully_sharded_loras"])
+        lora_group.add_argument("--default-mm-loras",
+                                **lora_kwargs["default_mm_loras"])
+
+        # PromptAdapter related configs
+        prompt_adapter_kwargs = get_kwargs(PromptAdapterConfig)
+        prompt_adapter_group = parser.add_argument_group(
+            title="PromptAdapterConfig",
+            description=PromptAdapterConfig.__doc__,
+>>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
         )
         lora_group.add_argument("--max-cpu-loras", **lora_kwargs["max_cpu_loras"])
         lora_group.add_argument(
@@ -1839,6 +1862,7 @@ class EngineArgs:
         if not model_config.is_multimodal_model and self.default_mm_loras:
             raise ValueError(
                 "Default modality-specific LoRA(s) were provided for a "
+<<<<<<< HEAD
                 "non multimodal model"
             )
 
@@ -1873,6 +1897,21 @@ class EngineArgs:
                 "Consider increasing max_num_batched_tokens or "
                 "decreasing num_speculative_tokens"
             )
+=======
+                "non multimodal model")
+
+        lora_config = LoRAConfig(
+            bias_enabled=self.enable_lora_bias,
+            max_lora_rank=self.max_lora_rank,
+            max_loras=self.max_loras,
+            default_mm_loras=self.default_mm_loras,
+            fully_sharded_loras=self.fully_sharded_loras,
+            lora_extra_vocab_size=self.lora_extra_vocab_size,
+            long_lora_scaling_factors=self.long_lora_scaling_factors,
+            lora_dtype=self.lora_dtype,
+            max_cpu_loras=self.max_cpu_loras if self.max_cpu_loras
+            and self.max_cpu_loras > 0 else None) if self.enable_lora else None
+>>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 
         # bitsandbytes pre-quantized model need a specific model loader
         if model_config.quantization == "bitsandbytes":
