@@ -181,8 +181,11 @@ class OpenAIServingChat(OpenAIServing):
             raise self.engine_client.dead_error
 
         try:
-            lora_request = self._maybe_get_adapters(
-                request, supports_default_mm_loras=True)
+            (
+                lora_request,
+                prompt_adapter_request,
+            ) = self._maybe_get_adapters(request,
+                                         supports_default_mm_loras=True)
 
             model_name = self._get_model_name(request.model, lora_request)
 

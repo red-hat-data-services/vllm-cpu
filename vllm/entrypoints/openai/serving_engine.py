@@ -478,22 +478,22 @@ class OpenAIServing:
         self,
         request: AnyRequest,
         supports_default_mm_loras: bool = False,
-    ) -> Optional[LoRARequest]:
+    ) -> Union[tuple[None, None], tuple[LoRARequest, None], tuple[
+            None, PromptAdapterRequest]]:
 
         if request.model in self.models.lora_requests:
-            return self.models.lora_requests[request.model]
+            return self.models.lora_requests[request.model], None
 
         # Currently only support default modality specific loras
         # if we have exactly one lora matched on the request.
         if supports_default_mm_loras:
             default_mm_lora = self._get_active_default_mm_loras(request)
             if default_mm_lora is not None:
-                return default_mm_lora
+                return default_mm_lora, None
 
         if self._is_model_supported(request.model):
             return None, None
-        if request.model in self.models.lora_requests:
-            return self.models.lora_requests[request.model], None
+
         for prompt_adapter in self.models.prompt_adapter_requests:
             if request.model == prompt_adapter.prompt_adapter_name:
                 return None, prompt_adapter
@@ -518,7 +518,7 @@ class OpenAIServing:
                         message_types.add(content_dict["type"].split("_")[0])
         return message_types
 
-    async def _normalize_prompt_text_to_input(
+    def _normalize_prompt_text_to_input(
         self,
         request: AnyRequest,
         tokenizer: AnyTokenizer,

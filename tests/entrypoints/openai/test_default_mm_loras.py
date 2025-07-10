@@ -24,7 +24,18 @@ ACTIVE_MM_LORA_RESPONSE = "Spoken text: The first words I spoke in the original 
 
 
 @pytest.fixture(scope="module")
-def multimodal_server():  # noqa: F811
+def monkeypatch_module():
+    from _pytest.monkeypatch import MonkeyPatch
+    mpatch = MonkeyPatch()
+    yield mpatch
+    mpatch.undo()
+
+
+@pytest.fixture(scope="module", params=[False, True])
+def multimodal_server(request, monkeypatch_module):  # noqa: F811
+
+    use_v1 = request.param
+    monkeypatch_module.setenv('VLLM_USE_V1', '1' if use_v1 else '0')
 
     args = [
         # use half precision for speed and memory savings in CI environment
@@ -48,8 +59,7 @@ def multimodal_server():  # noqa: F811
         f"{{\"audio\": \"{AUDIO_LORA_PATH}\"}}",
     ]
 
-    with RemoteOpenAIServer(MULTIMODAL_MODEL_NAME, args,
-                            max_wait_seconds=480) as remote_server:
+    with RemoteOpenAIServer(MULTIMODAL_MODEL_NAME, args) as remote_server:
         yield remote_server
 
 

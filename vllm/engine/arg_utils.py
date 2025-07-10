@@ -761,6 +761,45 @@ class EngineArgs:
         lora_group.add_argument("--default-mm-loras",
                                 **lora_kwargs["default_mm_loras"])
 
+        # PromptAdapter related configs
+        prompt_adapter_kwargs = get_kwargs(PromptAdapterConfig)
+        prompt_adapter_group = parser.add_argument_group(
+            title="PromptAdapterConfig",
+            description=PromptAdapterConfig.__doc__,
+        )
+        prompt_adapter_group.add_argument(
+            "--enable-prompt-adapter",
+            action=argparse.BooleanOptionalAction,
+            help="If True, enable handling of PromptAdapters.")
+        prompt_adapter_group.add_argument(
+            "--max-prompt-adapters",
+            **prompt_adapter_kwargs["max_prompt_adapters"])
+        prompt_adapter_group.add_argument(
+            "--max-prompt-adapter-token",
+            **prompt_adapter_kwargs["max_prompt_adapter_token"])
+
+        # Device arguments
+        device_kwargs = get_kwargs(DeviceConfig)
+        device_group = parser.add_argument_group(
+            title="DeviceConfig",
+            description=DeviceConfig.__doc__,
+        )
+        device_group.add_argument("--device",
+                                  **device_kwargs["device"],
+                                  deprecated=True)
+
+        # Speculative arguments
+        speculative_group = parser.add_argument_group(
+            title="SpeculativeConfig",
+            description=SpeculativeConfig.__doc__,
+        )
+        speculative_group.add_argument(
+            "--speculative-config",
+            type=json.loads,
+            default=None,
+            help="The configurations for speculative decoding. Should be a "
+            "JSON string.")
+
         # Observability arguments
         observability_kwargs = get_kwargs(ObservabilityConfig)
         observability_group = parser.add_argument_group(

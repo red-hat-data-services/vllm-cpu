@@ -2402,7 +2402,12 @@ class LoRAConfig:
     (added to the base model vocabulary)."""
     lora_vocab_padding_size: ClassVar[int] = current_platform\
         .get_lora_vocab_padding_size()
-
+    long_lora_scaling_factors: Optional[tuple[float, ...]] = None
+    """Specify multiple scaling factors (which can be different from base model
+    scaling factor - see eg. Long LoRA) to allow for multiple LoRA adapters
+    trained with those scaling factors to be used at the same time. If not
+    specified, only adapters trained with the base model scaling factor are
+    allowed."""
     default_mm_loras: Optional[dict[str, str]] = None
     """Dictionary mapping specific modalities to LoRA model paths; this field
     is only applicable to multimodal models and should be leveraged when a

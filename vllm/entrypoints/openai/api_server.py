@@ -1634,14 +1634,6 @@ async def init_app_state(
                     "This discrepancy may lead to performance degradation.",
                     resolved_chat_template, args.model)
 
-    if args.tool_server == "demo":
-        tool_server: Optional[ToolServer] = DemoToolServer()
-    elif args.tool_server:
-        tool_server = MCPToolServer()
-        await tool_server.add_tool_server(args.tool_server)
-    else:
-        tool_server = None
-
     # Merge default_mm_loras into the static lora_modules
     default_mm_loras = (vllm_config.lora_config.default_mm_loras
                         if vllm_config.lora_config is not None else {})
@@ -1664,6 +1656,7 @@ async def init_app_state(
         model_config=model_config,
         base_model_paths=base_model_paths,
         lora_modules=lora_modules,
+        prompt_adapters=args.prompt_adapters,
     )
     await state.openai_serving_models.init_static_loras()
     state.openai_serving_responses = OpenAIServingResponses(
