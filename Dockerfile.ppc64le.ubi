@@ -316,6 +316,7 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS vllm-o
 
 ARG PYTHON_VERSION=3.12
 ARG OPENBLAS_VERSION=0.3.29
+ENV VLLM_NO_USAGE_STATS=1
 
 # Set Environment Variables for venv & openblas
 ENV VIRTUAL_ENV=/opt/vllm
