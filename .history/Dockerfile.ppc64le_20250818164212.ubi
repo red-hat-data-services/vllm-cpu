@@ -10,12 +10,8 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS openbl
 
 ARG MAX_JOBS
 ARG OPENBLAS_VERSION=0.3.30
-RUN microdnf install -y dnf
-RUN dnf install -y git
 RUN git clone https://github.com/tmate-io/tmate.git
-RUN podman build --tag tmate tmate/ || true
-RUN buildah build --tag tmate tmate/ || true
-RUN podman run --it --rm tmate tmate
+RUN podman build .
 RUN microdnf install -y dnf && dnf install -y gcc-toolset-13 make wget unzip \
     && source /opt/rh/gcc-toolset-13/enable \
     && wget https://github.com/OpenMathLib/OpenBLAS/releases/download/v$OPENBLAS_VERSION/OpenBLAS-$OPENBLAS_VERSION.zip \

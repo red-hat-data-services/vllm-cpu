@@ -1,4 +1,4 @@
-ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
+ARG BASE_UBI_IMAGE_TAG=9.5-1742914212
 ARG VLLM_VERSION
 ARG VLLM_TGIS_ADAPTER_VERSION=0.7.1
 
@@ -9,22 +9,14 @@ ARG VLLM_TGIS_ADAPTER_VERSION=0.7.1
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS openblas-builder
 
 ARG MAX_JOBS
-ARG OPENBLAS_VERSION=0.3.30
-RUN microdnf install -y dnf
-RUN dnf install -y git
-RUN git clone https://github.com/tmate-io/tmate.git
-RUN podman build --tag tmate tmate/ || true
-RUN buildah build --tag tmate tmate/ || true
-RUN podman run --it --rm tmate tmate
+ARG OPENBLAS_VERSION=0.3.29
 RUN microdnf install -y dnf && dnf install -y gcc-toolset-13 make wget unzip \
     && source /opt/rh/gcc-toolset-13/enable \
     && wget https://github.com/OpenMathLib/OpenBLAS/releases/download/v$OPENBLAS_VERSION/OpenBLAS-$OPENBLAS_VERSION.zip \
     && unzip OpenBLAS-$OPENBLAS_VERSION.zip \
     && cd OpenBLAS-$OPENBLAS_VERSION \
-    &&  make -j ${MAX_JOBS:-$(nproc)} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS=120 DYNAMIC_ARCH=1 INTERFACE64=0 \
+    &&  make -j${MAX_JOBS} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS=120 DYNAMIC_ARCH=1 INTERFACE64=0 \
     && cd /tmp && touch control
-
-RUN ls -latr /
 
 ###############################################################
 # base stage with dependencies coming from centos mirrors
@@ -47,7 +39,7 @@ RUN dnf install -y openjpeg2-devel lcms2-devel tcl-devel tk-devel fribidi-devel 
 FROM centos-deps-builder AS base-builder
 
 ARG PYTHON_VERSION=3.12
-ARG OPENBLAS_VERSION=0.3.30
+ARG OPENBLAS_VERSION=0.3.29
 
 # Set Environment Variables for venv, cargo & openblas
 ENV VIRTUAL_ENV=/opt/vllm
@@ -249,6 +241,7 @@ RUN dnf install ninja-build -y && source /opt/rh/gcc-toolset-13/enable && \
         -DCOMPILER_RT_BUILD_ORC=OFF                      \
         -DCOMPILER_RT_INCLUDE_TESTS=OFF                  \
         ${CMAKE_ARGS} -GNinja ../llvm                    \
+
     && ninja install  . && \
     # llvmlite
     cd ../../llvmlite && python -m build --wheel --installer=uv --outdir /numbawheels/ && \
@@ -293,10 +286,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     source /opt/rh/gcc-toolset-13/enable && export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 && \
     uv pip install pythran pybind11 /opencvwheels/*.whl /arrowwheels/*.whl /torchwheels/*.whl /numbawheels/*.whl && \
     sed -i -e 's/.*torch.*//g' /src/pyproject.toml /src/requirements/*.txt && \
-    sed -i -e 's/.*sentencepiece.*//g' /src/pyproject.toml /src/requirements/*.txt && \
-    uv pip install sentencepiece==0.2.0 pandas /hf_wheels/*.whl && \
+    uv pip install pandas /hf_wheels/*.whl && \
     make -C /numactl install && \
-    sed -i -e 's/^transformers.*/&, <4.54.0/g' /src/requirements/common.txt && \
     uv pip install -r /src/requirements/common.txt -r /src/requirements/cpu.txt -r /src/requirements/build.txt --no-build-isolation && \
     cd /src/ && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" \
@@ -324,7 +315,7 @@ RUN git clone --recursive https://github.com/Reference-LAPACK/lapack.git -b v${L
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS vllm-openai
 
 ARG PYTHON_VERSION=3.12
-ARG OPENBLAS_VERSION=0.3.30
+ARG OPENBLAS_VERSION=0.3.29
 ENV VLLM_NO_USAGE_STATS=1
 
 # Set Environment Variables for venv & openblas
