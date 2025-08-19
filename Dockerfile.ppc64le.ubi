@@ -57,7 +57,7 @@ ENV UV_LINK_MODE=copy
 
 COPY --from=openblas-builder /tmp/control /dev/null
 
-RUN --mount=type=bind,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
+RUN --mount=type=cache,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
     dnf install -y openssl-devel \
     && dnf install -y \
        git tar gcc-toolset-13 automake libtool \
