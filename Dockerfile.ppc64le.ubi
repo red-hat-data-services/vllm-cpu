@@ -20,18 +20,21 @@ RUN microdnf install -y dnf && dnf install -y gcc-toolset-13 make wget unzip \
     &&  make -j ${MAX_JOBS:-$(nproc)} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS=120 DYNAMIC_ARCH=1 INTERFACE64=0 \
     && cd /tmp && touch control
 
+RUN du -sk /* | sort -n
+RUN df -h
+
 ###############################################################
 # base stage with dependencies coming from centos mirrors
 ###############################################################
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS centos-deps-builder
-RUN  microdnf install -y dnf && \ 
+RUN  microdnf install -y dnf && \
      dnf install -y https://mirror.stream.centos.org/9-stream/BaseOS/`arch`/os/Packages/centos-gpg-keys-9.0-24.el9.noarch.rpm \
         https://mirror.stream.centos.org/9-stream/BaseOS/`arch`/os/Packages/centos-stream-repos-9.0-24.el9.noarch.rpm \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
         dnf config-manager --set-enabled crb
 
 RUN dnf install -y openjpeg2-devel lcms2-devel tcl-devel tk-devel fribidi-devel && \
-    dnf remove -y centos-gpg-keys-9.0-24.el9.noarch centos-stream-repos-9.0-24.el9.noarch 
+    dnf remove -y centos-gpg-keys-9.0-24.el9.noarch centos-stream-repos-9.0-24.el9.noarch
 
 
 ###############################################################
@@ -189,7 +192,7 @@ RUN git clone --recursive https://github.com/numactl/numactl.git -b v${NUMACTL_V
     && make -j ${MAX_JOBS:-$(nproc)}
 
 ###############################################################
-# Stage to build numba 
+# Stage to build numba
 ###############################################################
 
 FROM base-builder AS numba-builder
