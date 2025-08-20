@@ -279,12 +279,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install maturin && \
     uv build --wheel --out-dir /hf_wheels/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
-    --mount=type=bind,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
-    --mount=type=bind,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
-    --mount=type=bind,from=numa-builder,source=/numactl/,target=/numactl/,ro \
-    --mount=type=bind,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
-    --mount=type=bind,src=.,dst=/src/,rw \
+    --mount=type=cache,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
+    --mount=type=cache,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
+    --mount=type=cache,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
+    --mount=type=cache,from=numa-builder,source=/numactl/,target=/numactl/,ro \
+    --mount=type=cache,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
+    --mount=type=cache,src=.,dst=/src/,rw \
     source /opt/rh/gcc-toolset-13/enable && export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 && \
     uv pip install pythran pybind11 /opencvwheels/*.whl /arrowwheels/*.whl /torchwheels/*.whl /numbawheels/*.whl && \
     sed -i -e 's/.*torch.*//g' /src/pyproject.toml /src/requirements/*.txt && \
@@ -343,9 +343,9 @@ COPY --from=numba-builder /tmp/control /dev/null
 
 # install gcc-11, python, openblas, numactl, lapack
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=numa-builder,source=/numactl/,target=/numactl/,rw \
-    --mount=type=bind,from=lapack-builder,source=/lapack/,target=/lapack/,rw \
-    --mount=type=bind,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
+    --mount=type=cache,from=numa-builder,source=/numactl/,target=/numactl/,rw \
+    --mount=type=cache,from=lapack-builder,source=/lapack/,target=/lapack/,rw \
+    --mount=type=cache,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
     rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
     microdnf install --nodocs -y \
     tar findutils openssl \
@@ -365,12 +365,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # consume previously built wheels
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
-    --mount=type=bind,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
-    --mount=type=bind,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
-    --mount=type=bind,from=vllmcache-builder,source=/hf_wheels/,target=/hf_wheels/,ro \
-    --mount=type=bind,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
-    --mount=type=bind,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
+    --mount=type=cache,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
+    --mount=type=cache,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
+    --mount=type=cache,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
+    --mount=type=cache,from=vllmcache-builder,source=/hf_wheels/,target=/hf_wheels/,ro \
+    --mount=type=cache,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
+    --mount=type=cache,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
     export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':') && uv pip install sentencepiece==0.2.0 && \
     HOME=/root uv pip install /opencvwheels/*.whl /arrowwheels/*.whl /torchwheels/*.whl /hf_wheels/*.whl /numbawheels/*.whl /vllmwheel/*.whl
 
@@ -406,7 +406,7 @@ USER root
 
 ARG VLLM_TGIS_ADAPTER_VERSION
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
+    --mount=type=cache,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
     HOME=/root uv pip install "$(echo /vllmwheel/*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION}
 
 ENV GRPC_PORT=8033 \
