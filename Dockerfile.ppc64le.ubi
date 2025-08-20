@@ -287,6 +287,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,src=.,dst=/src/,rw \
     source /opt/rh/gcc-toolset-13/enable && export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 && \
     uv pip install pythran pybind11 /opencvwheels/*.whl /arrowwheels/*.whl /torchwheels/*.whl /numbawheels/*.whl && \
+    ls -lrt /src/ && \
     sed -i -e 's/.*torch.*//g' /src/pyproject.toml /src/requirements/*.txt && \
     sed -i -e 's/.*sentencepiece.*//g' /src/pyproject.toml /src/requirements/*.txt && \
     uv pip install sentencepiece==0.2.0 pandas /hf_wheels/*.whl && \
