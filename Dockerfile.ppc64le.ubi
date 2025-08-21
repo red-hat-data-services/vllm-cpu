@@ -271,6 +271,8 @@ ARG VLLM_TGIS_ADAPTER_VERSION
 ARG VLLM_TARGET_DEVICE=cpu
 ARG GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 
+COPY ./ /src
+ 
 # this step installs vllm & tgis adapter and populates uv cache
 # with all the transitive dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -284,7 +286,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
     --mount=type=cache,from=numa-builder,source=/numactl/,target=/numactl/,ro \
     --mount=type=cache,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
-    --mount=type=cache,src=.,dst=/src/,rw \
     source /opt/rh/gcc-toolset-13/enable && export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 && \
     uv pip install pythran pybind11 /opencvwheels/*.whl /arrowwheels/*.whl /torchwheels/*.whl /numbawheels/*.whl && \
     ls -lrt /src/ && \
