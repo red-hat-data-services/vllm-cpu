@@ -11,7 +11,7 @@ ARG PYARROW_PARALLEL=1
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS openblas-builder
 
 ARG MAX_JOBS
-ARG OPENBLAS_VERSION=0.3.29
+ARG OPENBLAS_VERSION=0.3.30
 RUN microdnf install -y dnf && dnf install -y gcc-toolset-13 make wget unzip \
     && source /opt/rh/gcc-toolset-13/enable \
     && wget https://github.com/OpenMathLib/OpenBLAS/releases/download/v$OPENBLAS_VERSION/OpenBLAS-$OPENBLAS_VERSION.zip \
@@ -41,7 +41,7 @@ RUN dnf install -y openjpeg2-devel lcms2-devel tcl-devel tk-devel fribidi-devel 
 FROM centos-deps-builder AS base-builder
 
 ARG PYTHON_VERSION=3.12
-ARG OPENBLAS_VERSION=0.3.29
+ARG OPENBLAS_VERSION=0.3.30
 
 # Set Environment Variables for venv, cargo & openblas
 ENV VIRTUAL_ENV=/opt/vllm
@@ -320,7 +320,7 @@ RUN git clone --recursive https://github.com/Reference-LAPACK/lapack.git -b v${L
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS vllm-openai
 
 ARG PYTHON_VERSION=3.12
-ARG OPENBLAS_VERSION=0.3.29
+ARG OPENBLAS_VERSION=0.3.30
 ENV VLLM_NO_USAGE_STATS=1
 
 # Set Environment Variables for venv & openblas
