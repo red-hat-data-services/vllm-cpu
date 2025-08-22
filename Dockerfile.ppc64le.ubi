@@ -11,7 +11,7 @@ ARG PYARROW_PARALLEL=1
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS openblas-builder
 
 ARG MAX_JOBS
-ARG OPENBLAS_VERSION=0.3.29
+ARG OPENBLAS_VERSION=0.3.30
 RUN microdnf install -y dnf && dnf install -y gcc-toolset-13 make wget unzip \
     && source /opt/rh/gcc-toolset-13/enable \
     && wget https://github.com/OpenMathLib/OpenBLAS/releases/download/v$OPENBLAS_VERSION/OpenBLAS-$OPENBLAS_VERSION.zip \
@@ -41,7 +41,7 @@ RUN dnf install -y openjpeg2-devel lcms2-devel tcl-devel tk-devel fribidi-devel 
 FROM centos-deps-builder AS base-builder
 
 ARG PYTHON_VERSION=3.12
-ARG OPENBLAS_VERSION=0.3.29
+ARG OPENBLAS_VERSION=0.3.30
 
 # Set Environment Variables for venv, cargo & openblas
 ENV VIRTUAL_ENV=/opt/vllm
@@ -57,7 +57,7 @@ ENV UV_LINK_MODE=copy
 
 COPY --from=openblas-builder /tmp/control /dev/null
 
-RUN --mount=type=bind,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
+RUN --mount=type=cache,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
     dnf install -y openssl-devel \
     && dnf install -y \
        git tar gcc-toolset-13 automake libtool \
@@ -271,6 +271,8 @@ ARG VLLM_TGIS_ADAPTER_VERSION
 ARG VLLM_TARGET_DEVICE=cpu
 ARG GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 
+COPY ./ /src
+ 
 # this step installs vllm & tgis adapter and populates uv cache
 # with all the transitive dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -279,12 +281,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install maturin && \
     uv build --wheel --out-dir /hf_wheels/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
-    --mount=type=bind,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
-    --mount=type=bind,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
-    --mount=type=bind,from=numa-builder,source=/numactl/,target=/numactl/,ro \
-    --mount=type=bind,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
-    --mount=type=bind,src=.,dst=/src/,rw \
+    --mount=type=cache,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
+    --mount=type=cache,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
+    --mount=type=cache,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
+    --mount=type=cache,from=numa-builder,source=/numactl/,target=/numactl/,ro \
+    --mount=type=cache,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
     source /opt/rh/gcc-toolset-13/enable && export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 && \
     uv pip install pythran pybind11 /opencvwheels/*.whl /arrowwheels/*.whl /torchwheels/*.whl /numbawheels/*.whl && \
     sed -i -e 's/.*torch.*//g' /src/pyproject.toml /src/requirements/*.txt && \
@@ -319,7 +320,7 @@ RUN git clone --recursive https://github.com/Reference-LAPACK/lapack.git -b v${L
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS vllm-openai
 
 ARG PYTHON_VERSION=3.12
-ARG OPENBLAS_VERSION=0.3.29
+ARG OPENBLAS_VERSION=0.3.30
 ENV VLLM_NO_USAGE_STATS=1
 
 # Set Environment Variables for venv & openblas
@@ -343,9 +344,9 @@ COPY --from=numba-builder /tmp/control /dev/null
 
 # install gcc-11, python, openblas, numactl, lapack
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=numa-builder,source=/numactl/,target=/numactl/,rw \
-    --mount=type=bind,from=lapack-builder,source=/lapack/,target=/lapack/,rw \
-    --mount=type=bind,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
+    --mount=type=cache,from=numa-builder,source=/numactl/,target=/numactl/,rw \
+    --mount=type=cache,from=lapack-builder,source=/lapack/,target=/lapack/,rw \
+    --mount=type=cache,from=openblas-builder,source=/OpenBLAS-$OPENBLAS_VERSION/,target=/openblas/,rw \
     rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
     microdnf install --nodocs -y \
     tar findutils openssl \
@@ -365,12 +366,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # consume previously built wheels
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
-    --mount=type=bind,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
-    --mount=type=bind,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
-    --mount=type=bind,from=vllmcache-builder,source=/hf_wheels/,target=/hf_wheels/,ro \
-    --mount=type=bind,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
-    --mount=type=bind,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
+    --mount=type=cache,from=torch-builder,source=/torchwheels/,target=/torchwheels/,ro \
+    --mount=type=cache,from=arrow-builder,source=/arrowwheels/,target=/arrowwheels/,ro \
+    --mount=type=cache,from=cv-builder,source=/opencvwheels/,target=/opencvwheels/,ro \
+    --mount=type=cache,from=vllmcache-builder,source=/hf_wheels/,target=/hf_wheels/,ro \
+    --mount=type=cache,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
+    --mount=type=cache,from=numba-builder,source=/numbawheels/,target=/numbawheels/,ro \
     export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':') && uv pip install sentencepiece==0.2.0 && \
     HOME=/root uv pip install /opencvwheels/*.whl /arrowwheels/*.whl /torchwheels/*.whl /hf_wheels/*.whl /numbawheels/*.whl /vllmwheel/*.whl
 
@@ -406,7 +407,7 @@ USER root
 
 ARG VLLM_TGIS_ADAPTER_VERSION
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
+    --mount=type=cache,from=vllmcache-builder,source=/vllmwheel/,target=/vllmwheel/,ro \
     HOME=/root uv pip install "$(echo /vllmwheel/*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION}
 
 ENV GRPC_PORT=8033 \
