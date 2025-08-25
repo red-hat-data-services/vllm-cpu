@@ -80,9 +80,9 @@ ENV HF_HUB_OFFLINE=1 \
     # Allow requested max length to exceed what is extracted from the
     # config.json
     # see: https://github.com/vllm-project/vllm/pull/7080
-    VLLM_USAGE_SOURCE=production-docker-image \
+    VLLM_USAGE_STATS_SERVER=https://console.redhat.com/api/rhaiis-stats \
+    VLLM_USAGE_SOURCE=quay-docker-image \
     VLLM_WORKER_MULTIPROC_METHOD=fork \
-    VLLM_NO_USAGE_STATS=1 \
     OUTLINES_CACHE_DIR=/tmp/outlines \
     NUMBA_CACHE_DIR=/tmp/numba \
     TRITON_CACHE_DIR=/tmp/triton \
