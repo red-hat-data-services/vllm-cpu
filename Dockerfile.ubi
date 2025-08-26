@@ -67,7 +67,8 @@ RUN microdnf install -y gcc && \
 
 COPY LICENSE /licenses/vllm.md
 COPY examples/*.jinja /app/data/template/
-
+RUN mkdir -p /opt/app-root && \
+    ln -s /app/data/template /opt/app-root/template
 # install vllm (and any other dependencies )by running the payload script
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,src=payload,target=/workspace/payload \
@@ -79,7 +80,6 @@ ENV HF_HUB_OFFLINE=1 \
     # Allow requested max length to exceed what is extracted from the
     # config.json
     # see: https://github.com/vllm-project/vllm/pull/7080
-    VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 \
     VLLM_USAGE_SOURCE=production-docker-image \
     VLLM_WORKER_MULTIPROC_METHOD=fork \
     VLLM_NO_USAGE_STATS=1 \
