@@ -220,10 +220,11 @@ COPY --from=cv-builder /tmp/control /dev/null
 COPY --from=numa-builder /tmp/control /dev/null
 COPY --from=numba-builder /tmp/control /dev/null
 
+
 ARG VLLM_VERSION
+ARG VLLM_TGIS_ADAPTER_VERSION
 ARG VLLM_TARGET_DEVICE=cpu
 ARG GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
-ARG VLLM_TGIS_ADAPTER_VERSION="0.8.0"
 
 COPY ./ /src
 
