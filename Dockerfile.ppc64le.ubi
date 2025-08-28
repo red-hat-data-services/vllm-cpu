@@ -1,5 +1,5 @@
 ARG BASE_UBI_IMAGE_TAG=9.5-1742914212
-ARG VLLM_VERSION
+ARG VLLM_VERSION="v0.9.1.0"
 ARG VLLM_TGIS_ADAPTER_VERSION=0.7.1
 
 ###############################################################
@@ -265,6 +265,7 @@ COPY --from=cv-builder /tmp/control /dev/null
 COPY --from=numa-builder /tmp/control /dev/null
 COPY --from=numba-builder /tmp/control /dev/null
 
+ARG VLLM_VERSION
 ARG VLLM_TGIS_ADAPTER_VERSION
 ARG VLLM_TARGET_DEVICE=cpu
 ARG GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
