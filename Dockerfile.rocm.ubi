@@ -73,8 +73,6 @@ RUN python setup.py bdist_wheel --dist-dir=/dist/
 ##################################################################################################
 
 FROM rocm_base AS vllm-openai
-ARG FLASH_ATTENTION_WHEEL_STRATEGY
-ARG VLLM_WHEEL_STRATEGY
 
 WORKDIR /workspace
 
