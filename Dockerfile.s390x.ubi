@@ -18,7 +18,7 @@ ENV LANG=C.UTF-8 \
 RUN microdnf install -y \
     which procps findutils tar vim git gcc gcc-gfortran g++ make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
-    openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy && \
+    openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile && \
     microdnf clean all
 
 # Python Installation
