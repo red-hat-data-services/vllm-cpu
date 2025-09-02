@@ -1,0 +1,21 @@
+commit 24c54a3
+Author: Daniele Trifirò <dtrifiro@redhat.com>
+Date:   Sat Aug 30 10:45:31 2025 +0200
+
+    load.read_file: do not use blobfile for local files
+
+diff --git a/tiktoken/load.py b/tiktoken/load.py
+index 9a5cc87..8d711a8 100644
+--- a/tiktoken/load.py
++++ b/tiktoken/load.py
+@@ -6,6 +6,10 @@ import os
+ 
+ 
+ def read_file(blobpath: str) -> bytes:
++    if os.path.exists(blobpath):
++        with open(blobpath, "rb") as f:
++            return f.read()
++
+     if not blobpath.startswith("http://") and not blobpath.startswith("https://"):
+         try:
+             import blobfile
