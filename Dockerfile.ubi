@@ -78,7 +78,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY make-blobfile-optional-in-tiktoken.patch /tmp/
 RUN microdnf install -y patch && \
     patch -p 1 "$VIRTUAL_ENV/lib/python3.12/site-packages/tiktoken/load.py" /tmp/make-blobfile-optional-in-tiktoken.patch && \
-    microdnf remove patch && \
+    microdnf remove -y patch && \
     microdnf clean all
 
 ENV HF_HUB_OFFLINE=1 \
