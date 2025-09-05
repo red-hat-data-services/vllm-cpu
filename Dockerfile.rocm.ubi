@@ -129,8 +129,7 @@ ENV HF_HUB_OFFLINE=1 \
     HIP_FORCE_DEV_KERNARG=1 \
     OUTLINES_CACHE_DIR=/tmp/outlines \
     NUMBA_CACHE_DIR=/tmp/numba \
-    TRITON_CACHE_DIR=/tmp/triton \
-    VLLM_ROCM_USE_AITER=1
+    TRITON_CACHE_DIR=/tmp/triton
 
 # setup non-root user for OpenShift
 RUN umask 002 && \
