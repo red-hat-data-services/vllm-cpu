@@ -1,8 +1,62 @@
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+# Base UBI image
+ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
 
-USER 1001
+###############################################################
+#                       BUILDER  STAGE                        #
+###############################################################
 
+FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builder-base
 
+ARG VLLM_VERSION="v0.10.0.2"
+ARG PYTHON_VERSION=3.12
+ARG VLLM_TGIS_ADAPTER_VERSION="0.8.0"
+ARG VLLM_TARGET_DEVICE=cpu
+
+USER root
+WORKDIR /root
+ENV HOME=/root
+
+ENV WHEEL_DIR=/wheelsdir
+ENV VIRTUAL_ENV=/opt/vllm
+ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
+ENV CARGO_HOME=/root/.cargo
+ENV RUSTUP_HOME=/root/.rustup
+ENV PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH
+
+RUN --mount=type=cache,target=/var/cache/dnf \
+    microdnf install -y \
+        python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
+    && python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV} \
+    && python -m pip install -U pip uv --no-cache
+
+# Important: Copy only bare minimum required for the script to run
+COPY requirements/ requirements/
+COPY pyproject.toml ./
+
+# The script is expected to install whatever python dependencies are missing
+# as well as whatever system libraries need to be installed from source
+COPY  build_vllm_*.sh ./
+
+# this script would build & install all necessary packages from source
+# in the current vurtual environment
+RUN --mount=type=cache,target=/root/.cache/uv \
+    ./build_vllm_$(uname -m).sh
+
+# copy vllm source code to build cache
+COPY . .
+
+# Build and install vllm (run this on both s390x as well as ppc64le)
+# build & install vLLM so that all transitive dependencies are build/downloaded into the uv cache
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -U setuptools && \
+    SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
+    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION};
+
+###############################################################
+#                   FINAL VLLM IMAGE STAGE                    #
+###############################################################
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS vllm-openai
 
 LABEL name="rhoai/odh-vllm-cpu-rhel9" \
       com.redhat.component="odh-vllm-cpu-rhel9" \
@@ -11,3 +65,120 @@ LABEL name="rhoai/odh-vllm-cpu-rhel9" \
       description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
       summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
       com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"
+
+ARG PYTHON_VERSION=3.12
+ENV VLLM_NO_USAGE_STATS=1
+
+# Set Environment Variables for venv & openblas
+ENV VIRTUAL_ENV=/opt/vllm
+ENV PATH=${VIRTUAL_ENV}/bin:$PATH:/usr/lib64/llvm15/bin
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
+ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
+ENV LD_LIBRARY_PATH=/opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib
+ENV OMP_NUM_THREADS=16
+ENV UV_LINK_MODE=copy
+ARG VLLM_VERSION="v0.10.0.2"
+
+
+RUN if [ "$(uname -m)" = "s390x" ]; then \
+        rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
+        && microdnf install --nodocs -y \
+              gcc gcc-gfortran g++ make patch zlib-devel \
+              libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
+              openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
+              clang llvm15-devel llvm15-static llvm15 clang-devel git perl-core libsodium-devel libsodium \
+              python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
+        && microdnf clean all; \
+    fi
+
+RUN if [ "$(uname -m)" = "s390x" ]; then \
+        python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
+        python -m pip install -U pip uv --no-cache; \
+    fi
+###################################
+# P system packages install block #
+###################################
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,from=builder-base,source=/root/numactl/,target=/numactl/ \
+    --mount=type=cache,from=builder-base,source=/root/lapack/,target=/lapack/ \
+    --mount=type=cache,from=builder-base,source=/root/OpenBLAS,target=/openblas/ \
+    bash -c '\
+      if [[ $(uname -m) == "s390x" ]]; then \
+       make -C /numactl install; \
+      fi; \
+      if [[ $(uname -m) == "ppc64le" ]]; then \
+         # system dependencies needed at runtime for ppc64le; \
+        rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm; \
+        microdnf install --nodocs -y \
+            libomp tar findutils openssl llvm15 llvm15-devel \
+            pkgconfig xsimd g++ gcc-fortran libsndfile \
+            libtiff libjpeg openjpeg2 zlib zeromq \
+            freetype lcms2 libwebp tcl tk utf8proc \
+            harfbuzz fribidi libraqm libimagequant libxcb \
+            python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
+        && microdnf clean all; \
+        python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
+        python -m pip install -U pip uv --no-cache; \
+        make -C /numactl install; \
+        PREFIX=/usr/local make -C /openblas install; \
+        uv pip install --no-cache cmake; \
+        cmake --install /lapack/build; \
+        uv pip uninstall cmake; \
+      fi'
+
+
+# consume previously built wheels
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,from=builder-base,source=/wheelsdir/,target=/wheelsdir/,ro \
+    export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':') && \
+    # --offline will ensure wheels are picked from uv cache and nothing is pulled from pypi/built from source
+    # vllm wheel should be present in /wheelsdir/ ( at least for ppc64le - and transitive dependencies in uv cache )
+    HOME=/root uv pip install /wheelsdir/*.whl --offline
+
+WORKDIR /home/vllm
+
+# setup non-root user for OpenShift
+RUN umask 002 && \
+    useradd --uid 2000 --gid 0 vllm && \
+    mkdir -p /home/vllm && \
+    chmod g+rwx /home/vllm
+
+ENV HF_HUB_OFFLINE=0 \
+    HOME=/home/vllm \
+    # Allow requested max length to exceed what is extracted from the
+    # config.json
+    # see: https://github.com/vllm-project/vllm/pull/7080
+    VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 \
+    VLLM_USAGE_SOURCE=production-docker-image \
+    VLLM_WORKER_MULTIPROC_METHOD=fork \
+    VLLM_NO_USAGE_STATS=1 \
+    OUTLINES_CACHE_DIR=/tmp/outlines \
+    VLLM_USE_V1=1
+
+COPY LICENSE /licenses/vllm.md
+COPY examples/*.jinja /app/data/template/
+
+USER 2000
+
+ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
+
+FROM vllm-openai AS vllm-grpc-adapter
+
+USER root
+
+ARG VLLM_TGIS_ADAPTER_VERSION="0.8.0"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,from=builder-base,source=/wheelsdir/,target=/wheelsdir/,ro \
+    HOME=/root uv pip install "$(echo /wheelsdir/vllm*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION};
+
+ENV GRPC_PORT=8033 \
+    PORT=8000 \
+    # As an optimization, vLLM disables logprobs when using spec decoding by
+    # default, but this would be unexpected to users of a hosted model that
+    # happens to have spec decoding
+    # see: https://github.com/vllm-project/vllm/pull/6485
+    DISABLE_LOGPROBS_DURING_SPEC_DECODING=false
+
+USER 2000
+
+ENTRYPOINT ["python", "-m", "vllm_tgis_adapter", "--uvicorn-log-level=warning"]
