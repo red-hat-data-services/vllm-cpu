@@ -24,6 +24,7 @@ repos:
   rev: v1.34.0
   hooks:
   - id: typos
+    exclude: 'Dockerfile\.rocm\.ubi'
 - repo: https://github.com/PyCQA/isort
   rev: 6.0.1
   hooks:

@@ -47,12 +47,33 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --index-url "https://download.pytorch.org/whl/rocm${version}" \
         torch==2.7.0+rocm${version}\
         torchvision==0.22.0+rocm${version} && \
-    # Install libdrm-amdgpu to avoid errors when retrieving device information (amdgpu.ids: No such file or directory)
-    microdnf install -y --nodocs libdrm-amdgpu && \
+    microdnf install -y --nodocs \
+        # aiter requires rocm dev dependencies (and temporarily, which, see https://github.com/ROCm/aiter/pull/932)
+        which \
+        amd-smi-lib \
+        hipblas-devel \
+        hipblaslt-devel \
+        hipcc \
+        hipcub-devel \
+        hipfft-devel \
+        hiprand-devel \
+        hipsolver-devel \
+        hipsparse-devel \
+        hsa-rocr-devel \
+        miopen-hip-devel \
+        rccl-devel \
+        rocblas-devel \
+        rocm-device-libs \
+        rocprim-devel \
+        rocrand-devel \
+        rocthrust-devel \
+        # Install libdrm-amdgpu to avoid errors when retrieving device information (amdgpu.ids: No such file or directory)
+        libdrm-amdgpu \
+        && \
     microdnf clean all
 
-
-ENV LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages/numpy.libs:$LD_LIBRARY_PATH"
+ENV PATH=/opt/rocm/bin:$PATH \
+    LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages/numpy.libs"
 ENV LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages/pillow.libs:$LD_LIBRARY_PATH"
 ENV LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages/triton/backends/amd/lib:$LD_LIBRARY_PATH"
 ENV LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages/torch/lib:$LD_LIBRARY_PATH"
@@ -73,8 +94,7 @@ RUN python setup.py bdist_wheel --dist-dir=/dist/
 ##################################################################################################
 
 FROM rocm_base AS vllm-openai
-ARG FLASH_ATTENTION_WHEEL_STRATEGY
-ARG VLLM_WHEEL_STRATEGY
+ARG PYTHON_VERSION
 
 WORKDIR /workspace
 
