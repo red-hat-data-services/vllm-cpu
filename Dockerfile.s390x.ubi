@@ -141,6 +141,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Final build stage
 FROM python-install AS vllm-openai
 ARG PYTHON_VERSION
+ARG VLLM_VERSION
+
 ENV VLLM_NO_USAGE_STATS=1
 
 # Set correct library path for torch and numactl
