@@ -50,7 +50,10 @@ class CpuArchEnum(enum.Enum):
     ARM = enum.auto()
     POWERPC = enum.auto()
     S390X = enum.auto()
+<<<<<<< HEAD
     RISCV = enum.auto()
+=======
+>>>>>>> b29abd85b (Fixed numba module issue)
     OTHER = enum.auto()
     UNKNOWN = enum.auto()
 
@@ -511,8 +514,11 @@ class Platform:
             return CpuArchEnum.POWERPC
         elif machine == "s390x":
             return CpuArchEnum.S390X
+<<<<<<< HEAD
         elif machine.startswith("riscv"):
             return CpuArchEnum.RISCV
+=======
+>>>>>>> b29abd85b (Fixed numba module issue)
 
         return CpuArchEnum.OTHER if machine else CpuArchEnum.UNKNOWN
 

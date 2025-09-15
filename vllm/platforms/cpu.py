@@ -496,6 +496,7 @@ class CpuPlatform(Platform):
         return True
 
     @classmethod
+<<<<<<< HEAD
     def support_hybrid_kv_cache(cls) -> bool:
         return True
 
@@ -533,3 +534,13 @@ class CpuPlatform(Platform):
                 import vllm._C  # noqa: F401
             except ImportError as e:
                 logger.warning("Failed to import from vllm._C: %r", e)
+=======
+    def default_v1(cls, model_config) -> bool:
+        """Returns whether the current platform can use v1 by default for the
+        supplied model configuration.
+        """
+        arch = cls.get_cpu_architecture()
+        return (cls.supports_v1(model_config)
+                and arch in (CpuArchEnum.X86, CpuArchEnum.POWERPC,
+                             CpuArchEnum.ARM, CpuArchEnum.S390X))
+>>>>>>> b29abd85b (Fixed numba module issue)
