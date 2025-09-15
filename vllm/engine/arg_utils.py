@@ -1535,10 +1535,21 @@ class EngineArgs:
             # global layers in interleaved sliding window models.
             sliding_window = model_config.get_sliding_window()
 
-        # Resolve "auto" kv_cache_dtype to actual value from model config
-        resolved_cache_dtype = resolve_kv_cache_dtype_string(
-            self.kv_cache_dtype, model_config
-        )
+        # Set default arguments for V0 or V1 Engine.
+        if use_v1:
+            self._set_default_args_v1(usage_context, model_config)
+            # Disable chunked prefill for POWER (ppc64le)/ARM/s390x CPUs in V1
+            if current_platform.is_cpu(
+            ) and current_platform.get_cpu_architecture() in (
+                    CpuArchEnum.POWERPC, CpuArchEnum.S390X, CpuArchEnum.ARM):
+                logger.info(
+                    "Chunked prefill is not supported for ARM and POWER "
+                    "and S390X CPUs; "
+                    "disabling it for V1 backend.")
+                self.enable_chunked_prefill = False
+        else:
+            self._set_default_args_v0(model_config)
+        assert self.enable_chunked_prefill is not None
 
         assert self.enable_prefix_caching is not None, (
             "enable_prefix_caching must be set by this point"
