@@ -182,3 +182,11 @@ ENV GRPC_PORT=8033 \
 USER 2000
 
 ENTRYPOINT ["python", "-m", "vllm_tgis_adapter", "--uvicorn-log-level=warning"]
+
+LABEL name="rhoai/odh-vllm-cpu-rhel9" \
+      com.redhat.component="odh-vllm-cpu-rhel9" \
+      io.k8s.display-name="odh-vllm-cpu-rhel9" \
+      io.k8s.description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+      description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+      summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+      com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"
