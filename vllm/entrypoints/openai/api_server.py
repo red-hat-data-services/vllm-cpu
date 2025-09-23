@@ -10,6 +10,7 @@ import json
 import multiprocessing
 import multiprocessing.forkserver as forkserver
 import os
+import secrets
 import signal
 import socket
 import tempfile
@@ -1245,7 +1246,7 @@ def load_log_config(log_config_file: Optional[str]) -> Optional[dict]:
 class AuthenticationMiddleware:
     """
     Pure ASGI middleware that authenticates each request by checking
-    if the Authorization header exists and equals "Bearer {api_key}".
+    if the Authorization Bearer token exists and equals anyof "{api_key}".
 
     Notes
     -----
@@ -1256,7 +1257,23 @@ class AuthenticationMiddleware:
 
     def __init__(self, app: ASGIApp, tokens: list[str]) -> None:
         self.app = app
-        self.api_tokens = {f"Bearer {token}" for token in tokens}
+        self.api_tokens = tokens
+
+    def verify_token(self, headers: Headers) -> bool:
+        authorization_header_value = headers.get("Authorization")
+        if not authorization_header_value:
+            return False
+
+        scheme, _, param = authorization_header_value.partition(" ")
+        if scheme.lower() != "bearer":
+            return False
+
+        token_match = False
+        for token in self.api_tokens:
+            if secrets.compare_digest(param, token):
+                token_match = True
+
+        return token_match
 
     def __call__(self, scope: Scope, receive: Receive,
                  send: Send) -> Awaitable[None]:
@@ -1269,8 +1286,7 @@ class AuthenticationMiddleware:
         url_path = URL(scope=scope).path.removeprefix(root_path)
         headers = Headers(scope=scope)
         # Type narrow to satisfy mypy.
-        if url_path.startswith("/v1") and headers.get(
-                "Authorization") not in self.api_tokens:
+        if url_path.startswith("/v1") and not self.verify_token(headers):
             response = JSONResponse(content={"error": "Unauthorized"},
                                     status_code=401)
             return response(scope, receive, send)
