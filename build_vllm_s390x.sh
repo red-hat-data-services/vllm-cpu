@@ -7,7 +7,6 @@ export WHEEL_DIR=/wheelsdir
 export HOME=/root
 export CURDIR=$(pwd)
 export VIRTUAL_ENV=/opt/venv
-export VLLM_VERSION="v0.10.0.2"
 export CARGO_HOME=/root/.cargo
 export RUSTUP_HOME=/root/.rustup
 export PATH=$CARGO_HOME/bin:$RUSTUP_HOME/bin:$PATH
