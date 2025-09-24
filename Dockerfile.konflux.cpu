@@ -7,7 +7,7 @@ ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builder-base
 
-ARG VLLM_VERSION="v0.10.0.2"
+ARG VLLM_VERSION="0.10.1.1.6"
 ARG PYTHON_VERSION=3.12
 ARG VLLM_TGIS_ADAPTER_VERSION="0.8.0"
 ARG VLLM_TARGET_DEVICE=cpu
@@ -25,7 +25,7 @@ ENV PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH
 
 RUN --mount=type=cache,target=/var/cache/dnf \
     microdnf install -y \
-        python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
+    python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
     && python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV} \
     && python -m pip install -U pip uv --no-cache
 
@@ -59,12 +59,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS vllm-openai
 
 LABEL name="rhoai/odh-vllm-cpu-rhel9" \
-      com.redhat.component="odh-vllm-cpu-rhel9" \
-      io.k8s.display-name="odh-vllm-cpu-rhel9" \
-      io.k8s.description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-      description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-      summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-      com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"
+    com.redhat.component="odh-vllm-cpu-rhel9" \
+    io.k8s.display-name="odh-vllm-cpu-rhel9" \
+    io.k8s.description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+    description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+    summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+    com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"
 
 ARG PYTHON_VERSION=3.12
 ENV VLLM_NO_USAGE_STATS=1
@@ -77,23 +77,23 @@ ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 ENV LD_LIBRARY_PATH=/opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib
 ENV OMP_NUM_THREADS=16
 ENV UV_LINK_MODE=copy
-ARG VLLM_VERSION="v0.10.0.2"
+ARG VLLM_VERSION="0.10.1.1.6"
 
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
-        rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
-        && microdnf install --nodocs -y \
-              gcc gcc-gfortran g++ make patch zlib-devel \
-              libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
-              openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
-              clang llvm15-devel llvm15-static llvm15 clang-devel git perl-core libsodium-devel libsodium \
-              python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
-        && microdnf clean all; \
+    rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
+    && microdnf install --nodocs -y \
+    gcc gcc-gfortran g++ make patch zlib-devel \
+    libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
+    openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
+    clang llvm15-devel llvm15-static llvm15 clang-devel git perl-core libsodium-devel libsodium \
+    python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
+    && microdnf clean all; \
     fi
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
-        python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
-        python -m pip install -U pip uv --no-cache; \
+    python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
+    python -m pip install -U pip uv --no-cache; \
     fi
 ###################################
 # P system packages install block #
@@ -103,29 +103,32 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,from=builder-base,source=/root/lapack/,target=/lapack/ \
     --mount=type=cache,from=builder-base,source=/root/OpenBLAS,target=/openblas/ \
     bash -c '\
-      if [[ $(uname -m) == "s390x" ]]; then \
-       make -C /numactl install; \
-      fi; \
-      if [[ $(uname -m) == "ppc64le" ]]; then \
-         # system dependencies needed at runtime for ppc64le; \
-        rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm; \
-        microdnf install --nodocs -y \
-            libomp tar findutils openssl llvm15 llvm15-devel \
-            pkgconfig xsimd g++ gcc-fortran libsndfile \
-            libtiff libjpeg openjpeg2 zlib zeromq \
-            freetype lcms2 libwebp tcl tk utf8proc \
-            harfbuzz fribidi libraqm libimagequant libxcb \
-            python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
-        && microdnf clean all; \
-        python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
-        python -m pip install -U pip uv --no-cache; \
-        make -C /numactl install; \
-        PREFIX=/usr/local make -C /openblas install; \
-        uv pip install --no-cache cmake; \
-        cmake --install /lapack/build; \
-        uv pip uninstall cmake; \
-      fi'
+    if [[ $(uname -m) == "s390x" ]]; then \
+    make -C /numactl install; \
+    fi; \
+    if [[ $(uname -m) == "ppc64le" ]]; then \
+    # system dependencies needed at runtime for ppc64le; \
+    rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm; \
+    microdnf install --nodocs -y \
+    libomp tar findutils openssl llvm15 llvm15-devel \
+    pkgconfig xsimd g++ gcc-fortran libsndfile \
+    libtiff libjpeg openjpeg2 zlib zeromq \
+    freetype lcms2 libwebp tcl tk utf8proc \
+    harfbuzz fribidi libraqm libimagequant libxcb \
+    python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
+    && microdnf clean all; \
+    python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
+    python -m pip install -U pip uv --no-cache; \
+    make -C /numactl install; \
+    PREFIX=/usr/local make -C /openblas install; \
+    uv pip install --no-cache cmake; \
+    cmake --install /lapack/build; \
+    uv pip uninstall cmake; \
+    fi'
 
+# The `lscpu` command was added as a requirement in part of https://github.com/vllm-project/vllm/pull/21032, so installing it.
+RUN microdnf install --nodocs -y util-linux && \
+    microdnf clean all
 
 # consume previously built wheels
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -184,9 +187,9 @@ USER 2000
 ENTRYPOINT ["python", "-m", "vllm_tgis_adapter", "--uvicorn-log-level=warning"]
 
 LABEL name="rhoai/odh-vllm-cpu-rhel9" \
-      com.redhat.component="odh-vllm-cpu-rhel9" \
-      io.k8s.display-name="odh-vllm-cpu-rhel9" \
-      io.k8s.description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-      description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-      summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-      com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"
+    com.redhat.component="odh-vllm-cpu-rhel9" \
+    io.k8s.display-name="odh-vllm-cpu-rhel9" \
+    io.k8s.description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+    description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+    summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
+    com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"

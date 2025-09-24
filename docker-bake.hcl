@@ -18,11 +18,8 @@ variable "PYTHON_VERSION" {
 }
 
 variable "ROCM_VERSION" {
+  # This can be overridden by the prepare-payload action
   default = "6.3.4"
-}
-
-variable "VLLM_TGIS_ADAPTER_VERSION" {
-  default = "0.8.0"
 }
 
 
@@ -61,7 +58,6 @@ target "cuda" {
 
   args = {
     PYTHON_VERSION = "${PYTHON_VERSION}"
-    VLLM_TGIS_ADAPTER_VERSION = "${VLLM_TGIS_ADAPTER_VERSION}"
     CUDA_MAJOR =  "12"
     CUDA_MINOR =  "8"
   }
@@ -81,7 +77,6 @@ target "rocm" {
   args = {
     PYTHON_VERSION = "${PYTHON_VERSION}"
     ROCM_VERSION = "${ROCM_VERSION}"
-    VLLM_TGIS_ADAPTER_VERSION = "${VLLM_TGIS_ADAPTER_VERSION}"
   }
 
   tags = [
