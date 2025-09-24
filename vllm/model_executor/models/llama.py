@@ -49,7 +49,7 @@ from vllm.model_executor.model_loader.weight_utils import (
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
-from .interfaces import SupportsLoRA, SupportsPP
+from .interfaces import SupportsEagle3, SupportsLoRA, SupportsPP
 from .utils import (AutoWeightsLoader, PPMissingLayer, extract_layer_index,
                     is_pp_missing_parameter,
                     make_empty_intermediate_tensors_factory, make_layers,
@@ -167,18 +167,11 @@ class LlamaAttention(nn.Module):
                               rope_scaling=rope_scaling,
                               quant_config=quant_config)
 
-        if hasattr(config, "interleaved_sliding_window"):
-            interleaved_sliding_window = config.interleaved_sliding_window
-            if isinstance(interleaved_sliding_window, int):
-                sliding_window = interleaved_sliding_window
-            elif isinstance(interleaved_sliding_window, list):
-                sw_idx = layer_idx % len(interleaved_sliding_window)
-                sliding_window = interleaved_sliding_window[sw_idx]
-            else:
-                raise ValueError(
-                    f"{type(interleaved_sliding_window)} is not supported.")
-        else:
-            sliding_window = None
+        sliding_window = None
+        if layer_types := getattr(config, "layer_types", None):
+            is_sliding = layer_types[layer_idx] == "sliding_attention"
+            if is_sliding:
+                sliding_window = config.sliding_window
 
         self.attn = Attention(
             self.num_heads,
@@ -470,7 +463,7 @@ class LlamaModel(nn.Module):
         return loaded_params
 
 
-class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
+class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP, SupportsEagle3):
     packed_modules_mapping = {
         "qkv_proj": ["q_proj", "k_proj", "v_proj"],
         "gate_up_proj": ["gate_proj", "up_proj"]
@@ -613,9 +606,8 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         loaded_weight: torch.Tensor,
     ) -> tuple[str, torch.Tensor]:
 
-        def permute(w: torch.Tensor, n_heads: int):
+        def permute(w: torch.Tensor, n_heads: int, attn_out: int):
             attn_in = self.config.head_dim * n_heads
-            attn_out = self.config.hidden_size
 
             return w.view(n_heads, attn_in // n_heads // 2, 2,
                           attn_out).transpose(1, 2).reshape(attn_in, attn_out)
@@ -624,12 +616,24 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         modules = name.split(".")
 
         # rotary embeds should be sliced
+        # If using quantized model in mistral format,
+        # quantization scales (qscale_weight) also need to be sliced
         if "wk" in modules and modules[-1] == "weight":
             loaded_weight = permute(loaded_weight,
-                                    self.config.num_key_value_heads)
+                                    self.config.num_key_value_heads,
+                                    self.config.hidden_size)
+        elif "wk" in modules and modules[
+                -1] == "qscale_weight" and loaded_weight.numel() > 1:
+            loaded_weight = permute(loaded_weight,
+                                    self.config.num_key_value_heads, 1)
         elif "wq" in modules and modules[-1] == "weight":
             loaded_weight = permute(loaded_weight,
-                                    self.config.num_attention_heads)
+                                    self.config.num_attention_heads,
+                                    self.config.hidden_size)
+        elif "wq" in modules and modules[
+                -1] == "qscale_weight" and loaded_weight.numel() > 1:
+            loaded_weight = permute(loaded_weight,
+                                    self.config.num_attention_heads, 1)
 
         num_modules = len(modules)
         for i in range(num_modules):
