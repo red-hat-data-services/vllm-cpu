@@ -153,7 +153,7 @@ python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
 # -------------------------
 cd ${CURDIR}
 
-export AWS_LC_VERSION=v0.31.0
+export AWS_LC_VERSION=v0.32.0
 git clone --recursive https://github.com/aws/aws-lc-rs.git
 cd aws-lc-rs
 git checkout tags/aws-lc-sys/${AWS_LC_VERSION}
