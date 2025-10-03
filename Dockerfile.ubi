@@ -44,8 +44,7 @@ RUN microdnf install -y --nodocs \
         cuda-nvcc-${CUDA_MAJOR}-${CUDA_MINOR} \
         cuda-nvrtc-${CUDA_MAJOR}-${CUDA_MINOR} \
     && \
-    microdnf clean all && \
-    ln -s ${CUDA_HOME}/lib64/stubs/libcuda.so /usr/lib64/
+    microdnf clean all && 
 
 ## Python Installer ############################################################
 FROM cuda-base AS python-install
