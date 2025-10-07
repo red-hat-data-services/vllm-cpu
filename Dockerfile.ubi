@@ -24,17 +24,32 @@ RUN microdnf install -y \
     && microdnf clean all
 
 
-## Python Installer ############################################################
-FROM base AS python-install
-ARG PYTHON_VERSION
+FROM base AS cuda-base
+ARG BASE_UBI_IMAGE_TAG
 ARG CUDA_MAJOR
 ARG CUDA_MINOR
 
+RUN export rhel_base=${BASE_UBI_IMAGE_TAG/\.*/} && \
+    curl -Lo /etc/yum.repos.d/cuda-rhel${rhel_base}.repo \
+    https://developer.download.nvidia.com/compute/cuda/repos/rhel${rhel_base}/x86_64/cuda-rhel${rhel_base}.repo
+
 ENV CUDA_MAJOR=${CUDA_MAJOR}
 ENV CUDA_MINOR=${CUDA_MINOR}
+ENV CUDA_HOME="/usr/local/cuda-${CUDA_MAJOR}.${CUDA_MINOR}"
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${CUDA_HOME}/lib64/stubs/:${CUDA_HOME}/extras/CUPTI/lib64"
+RUN microdnf install -y --nodocs \
+        # cuobjdump , nvcc and nvrtc and are required by deepgemm for JIT
+        cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR} \
+        cuda-nvcc-${CUDA_MAJOR}-${CUDA_MINOR} \
+        cuda-nvrtc-${CUDA_MAJOR}-${CUDA_MINOR} \
+    && microdnf clean all
+
+## Python Installer ############################################################
+FROM cuda-base AS python-install
+ARG PYTHON_VERSION
 ENV UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR}
 ENV UV_INDEX_STRATEGY=unsafe-best-match
-ENV PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR}
 
 ENV VIRTUAL_ENV=/opt/vllm
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -53,12 +68,13 @@ ARG PYTHON_VERSION
 WORKDIR /workspace
 
 ENV VIRTUAL_ENV=/opt/vllm
-ENV PATH=$VIRTUAL_ENV/bin:$PATH
+ENV PATH="$VIRTUAL_ENV/bin:${CUDA_HOME}/bin:$PATH"
 
 # force using the python venv's cuda runtime libraries
 ENV LD_LIBRARY_PATH="${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages/nvidia/cuda_nvrtc/lib:${LD_LIBRARY_PATH}"
 ENV LD_LIBRARY_PATH="${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages/nvidia/cuda_runtime/lib:${LD_LIBRARY_PATH}"
 ENV LD_LIBRARY_PATH="${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvtx/lib:${LD_LIBRARY_PATH}"
+ENV LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:/usr/lib64"
 
 # Triton needs a CC compiler
 RUN microdnf install -y gcc && \
@@ -69,7 +85,7 @@ COPY LICENSE /licenses/vllm.md
 COPY examples/*.jinja /app/data/template/
 RUN mkdir -p /opt/app-root && \
     ln -s /app/data/template /opt/app-root/template
-# install vllm (and any other dependencies )by running the payload script
+# install vllm (and any other dependencies) by running the payload script
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,src=payload,target=/workspace/payload \
     ./payload/run.sh
@@ -77,7 +93,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # temporary workaround until https://github.com/openai/tiktoken/pull/446 is merged
 COPY make-blobfile-optional-in-tiktoken.patch /tmp/
 RUN microdnf install -y patch && \
-    patch -p 1 "$VIRTUAL_ENV/lib/python3.12/site-packages/tiktoken/load.py" /tmp/make-blobfile-optional-in-tiktoken.patch && \
+    patch -p 1 "$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages/tiktoken/load.py" /tmp/make-blobfile-optional-in-tiktoken.patch && \
     microdnf remove -y patch && \
     microdnf clean all
 
