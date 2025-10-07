@@ -573,6 +573,7 @@ class FlashAttentionImpl(AttentionImpl):
             q_descale=layer._q_scale,
             k_descale=layer._k_scale,
             v_descale=layer._v_scale,
+            s_aux=self.sinks,
         )
         return output
 
@@ -727,6 +728,7 @@ def cascade_attention(
     q_descale: Optional[torch.Tensor] = None,
     k_descale: Optional[torch.Tensor] = None,
     v_descale: Optional[torch.Tensor] = None,
+    s_aux: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     assert alibi_slopes is None, ("Cascade attention does not support ALiBi.")
     # TODO: Support sliding window.
@@ -763,6 +765,9 @@ def cascade_attention(
         if k_descale is not None else None,
         v_descale=v_descale.expand(descale_shape)
         if v_descale is not None else None,
+        # s_aux is incorporated into prefix_lse inside the GPU kernel,
+        # enabling its effect during the final attention merge.
+        s_aux=s_aux,
         num_splits=max_num_splits,
     )
 
