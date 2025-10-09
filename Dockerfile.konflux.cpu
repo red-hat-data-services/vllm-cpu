@@ -49,8 +49,13 @@ COPY . .
 # build & install vLLM so that all transitive dependencies are build/downloaded into the uv cache
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -U setuptools && \
-    SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
-    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION};
+    SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \
+      --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
+    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" && \
+    git clone --branch ${VLLM_TGIS_ADAPTER_VERSION} https://github.com/opendatahub-io/vllm-tgis-adapter.git /tmp/vllm-tgis-adapter && \
+    uv build --wheel --out-dir ${WHEEL_DIR} /tmp/vllm-tgis-adapter && \
+    uv pip install "$(echo ${WHEEL_DIR}/vllm_tgis_adapter-*.whl)" && \
+    rm -rf /tmp/vllm-tgis-adapter
 
 ###############################################################
 #                   FINAL VLLM IMAGE STAGE                    #
@@ -169,10 +174,11 @@ FROM vllm-openai AS vllm-grpc-adapter
 
 USER root
 
-ARG VLLM_TGIS_ADAPTER_VERSION="0.9.0.post1"
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,from=builder-base,source=/wheelsdir/,target=/wheelsdir/,ro \
-    HOME=/root uv pip install "$(echo /wheelsdir/vllm*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION};
+    HOME=/root uv pip install \
+    $(echo /wheelsdir/vllm*.whl)[tensorizer] \
+    $(echo /wheelsdir/vllm_tgis_adapter-*.whl)
 
 ENV GRPC_PORT=8033 \
     PORT=8000 \
