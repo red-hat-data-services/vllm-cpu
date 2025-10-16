@@ -49,6 +49,7 @@ group "default" {
   targets = [
     "cuda",
     "rocm",
+    "tpu",
   ]
 }
 
@@ -85,4 +86,21 @@ target "rocm" {
     "${REPOSITORY}:rocm-${GITHUB_RUN_ID}",
     RELEASE_IMAGE ? "quay.io/vllm/vllm-rocm:${replace(VLLM_VERSION, "+", "_")}" : ""
   ]
+}
+
+target "tpu" {
+  inherits = ["_common"]
+  dockerfile = "Dockerfile.tpu.ubi"
+
+  args = {
+    PYTHON_VERSION = "${PYTHON_VERSION}"
+  }
+
+  tags = [
+    "${REPOSITORY}:${replace(VLLM_VERSION, "+", "_")}", # vllm_version might contain local version specifiers (+) which are not valid tags
+    "${REPOSITORY}:tpu-${GITHUB_SHA}",
+    "${REPOSITORY}:tpu-${GITHUB_RUN_ID}",
+    RELEASE_IMAGE ? "quay.io/vllm/vllm-tpu:${replace(VLLM_VERSION, "+", "_")}" : ""
+  ]
+
 }
