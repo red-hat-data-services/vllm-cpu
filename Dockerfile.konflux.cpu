@@ -71,7 +71,7 @@ ENV VLLM_NO_USAGE_STATS=1
 
 # Set Environment Variables for venv & openblas
 ENV VIRTUAL_ENV=/opt/vllm
-ENV PATH=${VIRTUAL_ENV}/bin:$PATH:/usr/lib64/llvm15/bin
+ENV PATH=${VIRTUAL_ENV}/bin:/usr/local/bin:$PATH:/usr/lib64/llvm15/bin
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
 ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 ENV LD_LIBRARY_PATH=/opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib
@@ -81,12 +81,11 @@ ARG VLLM_VERSION="0.10.1.1.6"
 
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
-    rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
-    && microdnf install --nodocs -y \
+    microdnf install --nodocs -y \
     gcc gcc-gfortran g++ make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
-    clang llvm15-devel llvm15-static llvm15 clang-devel git perl-core libsodium-devel libsodium \
+    clang llvm-devel llvm clang-devel git perl-core \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
     && microdnf clean all; \
     fi
@@ -102,9 +101,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,from=builder-base,source=/root/numactl/,target=/numactl/ \
     --mount=type=cache,from=builder-base,source=/root/lapack/,target=/lapack/ \
     --mount=type=cache,from=builder-base,source=/root/OpenBLAS,target=/openblas/ \
+    --mount=type=cache,from=builder-base,source=/usr/local/,target=/tmp/usr-local/ \
     bash -c '\
     if [[ $(uname -m) == "s390x" ]]; then \
     make -C /numactl install; \
+    # Copy source-built LLVM from builder stage
+    cp -r /tmp/usr-local/bin/* /usr/local/bin/ 2>/dev/null || true; \
+    cp -r /tmp/usr-local/lib/* /usr/local/lib/ 2>/dev/null || true; \
+    cp -r /tmp/usr-local/include/* /usr/local/include/ 2>/dev/null || true; \
     fi; \
     if [[ $(uname -m) == "ppc64le" ]]; then \
     # system dependencies needed at runtime for ppc64le; \

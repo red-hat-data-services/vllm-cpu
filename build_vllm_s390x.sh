@@ -14,12 +14,11 @@ export C_INCLUDE_PATH=${C_INCLUDE_PATH:-/usr/local/include}
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 
 # install development packages
-rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 microdnf install -y \
     which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
-    clang clang-devel  ninja-build perl-core libsodium libsodium-devel llvm15 llvm15-devel llvm15-static && \
+    clang clang-devel ninja-build perl-core llvm llvm-devel && \
     microdnf clean all
 
 pip install --no-cache -U pip wheel && \
@@ -31,12 +30,22 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     rustup show
 
 # -------------------------
+# Install xsimd headers (header-only library)
+# -------------------------
+cd ${CURDIR}
+git clone https://github.com/xtensor-stack/xsimd.git -b 13.0.0
+cd xsimd
+mkdir -p /usr/local/include
+cp -r include/xsimd /usr/local/include/
+
+# -------------------------
 # Apache Arrow (C++ + Python)
 # -------------------------
 
 cd ${CURDIR}
 
-git clone https://github.com/apache/arrow.git
+export PYARROW_VERSION=19.0.1
+git clone --recursive https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
 cd arrow/cpp
 mkdir -p release
 cd release
@@ -52,7 +61,8 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DARROW_JSON=ON \
       -DARROW_CSV=ON \
       -DARROW_DATASET=ON \
-      -DPROTOBUF_PROTOC_EXECUTABLE=/usr/bin/protoc \
+      -DARROW_SIMD_LEVEL=NONE \
+      -DARROW_RUNTIME_SIMD_LEVEL=NONE \
       -DARROW_DEPENDENCY_SOURCE=BUNDLED \
       ..
 make -j"$(nproc)"
@@ -118,6 +128,68 @@ uv pip install maturin patchelf
 python -m maturin build --release --out "${WHEEL_DIR}"
 
 # -------------------------
+# Build LLVM 15 from source
+# -------------------------
+cd ${CURDIR}
+export MAX_JOBS=${MAX_JOBS:-"$(nproc)"}
+
+echo "Building LLVM 15 from source..."
+git clone --recursive https://github.com/llvm/llvm-project.git -b llvmorg-15.0.7
+cd llvm-project
+mkdir build
+cd build
+
+export PREFIX=/usr/local
+export CMAKE_ARGS=""
+CMAKE_ARGS="${CMAKE_ARGS} -DLLVM_ENABLE_PROJECTS=lld;libunwind;compiler-rt"
+CFLAGS="$(echo ${CFLAGS:-} | sed 's/-fno-plt //g')"
+CXXFLAGS="$(echo ${CXXFLAGS:-} | sed 's/-fno-plt //g')"
+CMAKE_ARGS="${CMAKE_ARGS} -DFFI_INCLUDE_DIR=$PREFIX/include"
+CMAKE_ARGS="${CMAKE_ARGS} -DFFI_LIBRARY_DIR=$PREFIX/lib"
+
+cmake -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_LIBRARY_PATH="${PREFIX}" \
+    -DLLVM_ENABLE_LIBEDIT=OFF \
+    -DLLVM_ENABLE_LIBXML2=OFF \
+    -DLLVM_ENABLE_RTTI=ON \
+    -DLLVM_ENABLE_TERMINFO=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_INCLUDE_DOCS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF \
+    -DLLVM_INCLUDE_GO_TESTS=OFF \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_UTILS=ON \
+    -DLLVM_INSTALL_UTILS=ON \
+    -DLLVM_UTILS_INSTALL_DIR=libexec/llvm \
+    -DLLVM_BUILD_LLVM_DYLIB=OFF \
+    -DLLVM_LINK_LLVM_DYLIB=OFF \
+    -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=WebAssembly \
+    -DLLVM_ENABLE_FFI=ON \
+    -DLLVM_ENABLE_Z3_SOLVER=OFF \
+    -DLLVM_OPTIMIZED_TABLEGEN=ON \
+    -DCMAKE_POLICY_DEFAULT_CMP0111=NEW \
+    -DCOMPILER_RT_BUILD_BUILTINS=ON \
+    -DCOMPILER_RT_BUILTINS_HIDE_SYMBOLS=OFF \
+    -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
+    -DCOMPILER_RT_BUILD_CRT=OFF \
+    -DCOMPILER_RT_BUILD_MEMPROF=OFF \
+    -DCOMPILER_RT_BUILD_PROFILE=OFF \
+    -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
+    -DCOMPILER_RT_BUILD_XRAY=OFF \
+    -DCOMPILER_RT_BUILD_GWP_ASAN=OFF \
+    -DCOMPILER_RT_BUILD_ORC=OFF \
+    -DCOMPILER_RT_INCLUDE_TESTS=OFF \
+    ${CMAKE_ARGS} -GNinja ../llvm
+
+ninja install
+echo "LLVM 15 build complete."
+
+# Update PATH and LD_LIBRARY_PATH for LLVM
+export PATH=/usr/local/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+# -------------------------
 # numba & llvmlite
 # -------------------------
 export MAX_JOBS=${MAX_JOBS:-"$(nproc)"}
@@ -125,8 +197,8 @@ export NUMBA_VERSION=0.61.2
 cd ${CURDIR}
 
 # Set up LLVM environment variables before building llvmlite
-export LLVM_CONFIG=/usr/bin/llvm-config-15
-export LLVM_PREFIX=/usr
+export LLVM_CONFIG=/usr/local/bin/llvm-config
+export LLVM_PREFIX=/usr/local
 export CFLAGS=""
 export CXXFLAGS=""
 
@@ -140,6 +212,9 @@ cd ${CURDIR}
 # Now build llvmlite with the installed LLVM
 cd llvmlite
 python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
+
+# Install llvmlite before building numba (numba depends on llvmlite)
+uv pip install "${WHEEL_DIR}"/llvmlite*.whl
 
 cd ${CURDIR}
 cd numba
