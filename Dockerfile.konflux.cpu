@@ -110,8 +110,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
          # system dependencies needed at runtime for ppc64le; \
         rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm; \
         microdnf install --nodocs -y \
-            libomp tar findutils openssl llvm15 llvm15-devel \
-            pkgconfig xsimd g++ gcc-fortran libsndfile \
+            libomp tar findutils openssls \
+            pkgconfig g++ gcc-fortran libsndfile \
             libtiff libjpeg openjpeg2 zlib zeromq \
             freetype lcms2 libwebp tcl tk utf8proc \
             harfbuzz fribidi libraqm libimagequant libxcb \
