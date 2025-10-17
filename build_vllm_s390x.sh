@@ -17,7 +17,7 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 microdnf install -y \
     which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
-    openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
+    openssl-devel openblas openblas-devel autoconf automake libtool libzstd-devel cmake numpy libsndfile \
     clang clang-devel ninja-build perl-core llvm llvm-devel && \
     microdnf clean all
 
