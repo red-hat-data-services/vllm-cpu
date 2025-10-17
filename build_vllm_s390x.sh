@@ -29,14 +29,14 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     rustup default stable && \
     rustup show
 
+## -------------------------
+## Install xsimd headers (header-only library)
 # -------------------------
-# Install xsimd headers (header-only library)
-# -------------------------
-cd ${CURDIR}
-git clone https://github.com/xtensor-stack/xsimd.git -b 13.0.0
-cd xsimd
-mkdir -p /usr/local/include
-cp -r include/xsimd /usr/local/include/
+#cd ${CURDIR}
+#git clone https://github.com/xtensor-stack/xsimd.git -b 13.0.0
+#cd xsimd
+#mkdir -p /usr/local/include
+#cp -r include/xsimd /usr/local/include/
 
 # -------------------------
 # Apache Arrow (C++ + Python)
@@ -44,8 +44,8 @@ cp -r include/xsimd /usr/local/include/
 
 cd ${CURDIR}
 
-export PYARROW_VERSION=19.0.1
-git clone --recursive https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
+#export PYARROW_VERSION=19.0.1
+git clone --recursive https://github.com/apache/arrow.git
 cd arrow/cpp
 mkdir -p release
 cd release
