@@ -21,7 +21,7 @@ microdnf install -y \
     clang clang-devel ninja-build perl-core llvm llvm-devel && \
     microdnf clean all
 
-pip install --no-cache -U pip wheel && \
+pip install --no-cache -U pip setuptools wheel && \
 pip install --no-cache -U uv
 
 curl https://sh.rustup.rs -sSf | sh -s -- -y && \
@@ -61,6 +61,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DARROW_JSON=ON \
       -DARROW_CSV=ON \
       -DARROW_DATASET=ON \
+      -DARROW_USE_SIMD=OFF \
       -DARROW_SIMD_LEVEL=NONE \
       -DARROW_RUNTIME_SIMD_LEVEL=NONE \
       -DARROW_DEPENDENCY_SOURCE=BUNDLED \
