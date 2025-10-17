@@ -10,7 +10,7 @@ microdnf install -y \
     git jq gcc-toolset-14 gcc-toolset-14-libatomic-devel automake libtool clang-devel openssl-devel freetype-devel fribidi-devel \
     harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel llvm15-devel \
     libraqm-devel libtiff-devel libwebp-devel libxcb-devel ninja-build openjpeg2-devel pkgconfig protobuf* \
-    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel
+    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf
 
 # install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -21,7 +21,7 @@ export PATH=$PATH:/usr/lib64/llvm15/bin
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
-uv pip install -U pip uv setuptools build wheel cmake
+uv pip install -U pip uv setuptools build wheel cmake auditwheel
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
@@ -58,7 +58,48 @@ export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' 
 
 cd ${CURDIR}
 
+install_pillow() {
+    cd ${CURDIR}
 
+    export PILLOW_VERSION=${PILLOW_VERSION:-$(curl -s https://api.github.com/repos/python-pillow/Pillow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Pillow ==================
+    git clone --recursive https://github.com/python-pillow/Pillow.git -b ${PILLOW_VERSION}
+    cd Pillow
+    uv build --wheel --out-dir /pillowwheel
+
+    : ================= Fix Pillow Wheel ====================
+    cd /pillowwheel
+    auditwheel repair pillow*.whl
+    mv wheelhouse/pillow*.whl ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR} /pillowwheel
+}
+install_pyzmq() {
+    cd ${CURDIR}
+
+    export PYZMQ_VERSION=${PYZMQ_VERSION:-$(curl -sL https://api.github.com/repos/zeromq/pyzmq/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Pyzmq ==================
+    git clone --recursive https://github.com/zeromq/pyzmq.git -b v${PYZMQ_VERSION}
+    cd pyzmq
+    uv build --wheel --out-dir /pyzmqwheel
+
+    : ================= Fix Pyzmq Wheel ====================
+    cd /pyzmqwheel
+    auditwheel repair pyzmq*.whl
+    mv wheelhouse/pyzmq*.whl ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR} /pyzmqwheel
+}
 install_torch_family() {
     cd ${CURDIR}
 
@@ -156,9 +197,37 @@ install_numba() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
+# TODO(): figure out exact llvmlite version needed by numba
+install_llvmlite() {
+    cd ${CURDIR}
+
+    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-$(curl -s https://api.github.com/repos/numba/llvmlite/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Llvmlite ==================
+    git clone --recursive https://github.com/numba/llvmlite.git -b v${LLVMLITE_VERSION}
+    cd llvmlite
+    uv build --wheel --out-dir /llvmlitewheel
+
+
+    : ================= Fix LLvmlite Wheel ====================
+    cd /llvmlitewheel
+
+    auditwheel repair llvmlite*.whl
+    mv wheelhouse/llvmlite*.whl ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR}
+}
+
 install_torch_family
 install_pyarrow
+install_llvmlite
 install_numba
+install_pillow
+install_pyzmq
 
 #wait $(jobs -p)
 
