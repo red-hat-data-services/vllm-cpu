@@ -844,9 +844,11 @@ class MultiModalContentParser(BaseMultiModalContentParser):
             allowed_media_domains=tracker.allowed_media_domains,
         )
 
-    def parse_image(
-        self, image_url: Optional[str], uuid: Optional[str] = None
-    ) -> None:
+    @property
+    def model_config(self) -> ModelConfig:
+        return self._tracker.model_config
+
+    def parse_image(self, image_url: str | None, uuid: str | None = None) -> None:
         image = self._connector.fetch_image(image_url) if image_url else None
 
         placeholder = self._tracker.add("image", image, uuid)
@@ -857,6 +859,12 @@ class MultiModalContentParser(BaseMultiModalContentParser):
         image_embeds: Union[str, dict[str, str], None],
         uuid: Optional[str] = None,
     ) -> None:
+        mm_config = self.model_config.get_multimodal_config()
+        if not mm_config.enable_mm_embeds:
+            raise ValueError(
+                "You must set `--enable-mm-embeds` to input `image_embeds`"
+            )
+
         if isinstance(image_embeds, dict):
             embeds = {
                 k: self._connector.fetch_image_embedding(v)
@@ -929,12 +937,12 @@ class AsyncMultiModalContentParser(BaseMultiModalContentParser):
             allowed_media_domains=tracker.allowed_media_domains,
         )
 
-    def parse_image(
-        self, image_url: Optional[str], uuid: Optional[str] = None
-    ) -> None:
-        image_coro = (
-            self._connector.fetch_image_async(image_url) if image_url else None
-        )
+    @property
+    def model_config(self) -> ModelConfig:
+        return self._tracker.model_config
+
+    def parse_image(self, image_url: str | None, uuid: str | None = None) -> None:
+        image_coro = self._connector.fetch_image_async(image_url) if image_url else None
 
         placeholder = self._tracker.add("image", image_coro, uuid)
         self._add_placeholder("image", placeholder)
@@ -944,9 +952,13 @@ class AsyncMultiModalContentParser(BaseMultiModalContentParser):
         image_embeds: Union[str, dict[str, str], None],
         uuid: Optional[str] = None,
     ) -> None:
-        future: asyncio.Future[Union[str, dict[str, str], None]] = (
-            asyncio.Future()
-        )
+        mm_config = self.model_config.get_multimodal_config()
+        if not mm_config.enable_mm_embeds:
+            raise ValueError(
+                "You must set `--enable-mm-embeds` to input `image_embeds`"
+            )
+
+        future: asyncio.Future[str | dict[str, str] | None] = asyncio.Future()
 
         if isinstance(image_embeds, dict):
             embeds = {
