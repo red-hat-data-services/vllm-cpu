@@ -42,11 +42,6 @@ gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" > /etc/yum.repos.d/amdgpu.repo
 
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    export version="$(awk -F. '{print $1"."$2}' <<< $ROCM_VERSION)" && \
-    uv pip install --pre \
-        --index-url "https://download.pytorch.org/whl/rocm${version}" \
-        torch==2.7.0+rocm${version}\
-        torchvision==0.22.0+rocm${version} && \
     microdnf install -y --nodocs \
         # aiter requires rocm dev dependencies (and temporarily, which, see https://github.com/ROCm/aiter/pull/932)
         which \
