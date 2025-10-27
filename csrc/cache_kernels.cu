@@ -15,9 +15,8 @@
 #endif
 
 #include <algorithm>
-##include <cfloat>include <cassert>
-#include <map>
-#include <vector>
+#include <cassert>
+#include <cfloat>
 
 #ifdef USE_ROCM
   #include <hip/hip_bf16.h>
