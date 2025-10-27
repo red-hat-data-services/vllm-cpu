@@ -29,7 +29,7 @@ target "_common" {
   context = "."
 
   args = {
-    BASE_UBI_IMAGE_TAG = "9.5-1742914212"
+    BASE_UBI_IMAGE_TAG = "9.5"
     PYTHON_VERSION = "3.12"
   }
 
