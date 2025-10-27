@@ -19,7 +19,7 @@ variable "PYTHON_VERSION" {
 
 variable "ROCM_VERSION" {
   # This can be overridden by the prepare-payload action
-  default = "6.3.4"
+  default = "6.4.3"
 }
 
 
