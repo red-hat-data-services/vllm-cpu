@@ -31,7 +31,7 @@ def multimodal_server():  # noqa: F811
         "--dtype",
         "half",
         "--max-model-len",
-        "12800",
+        "4096",
         "--enforce-eager",
         # lora config below
         "--enable-lora",
