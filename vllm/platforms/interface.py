@@ -515,10 +515,15 @@ class Platform:
         elif machine == "s390x":
             return CpuArchEnum.S390X
 <<<<<<< HEAD
+<<<<<<< HEAD
         elif machine.startswith("riscv"):
             return CpuArchEnum.RISCV
 =======
 >>>>>>> b29abd85b (Fixed numba module issue)
+=======
+        elif machine.startswith("riscv"):
+            return CpuArchEnum.RISCV
+>>>>>>> c42936d3d (Updated VLLM version to v0.11.0.1)
 
         return CpuArchEnum.OTHER if machine else CpuArchEnum.UNKNOWN
 
