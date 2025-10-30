@@ -367,11 +367,8 @@ class Platform:
             return CpuArchEnum.POWERPC
         elif machine == "s390x":
             return CpuArchEnum.S390X
-<<<<<<< HEAD
-=======
         elif machine.startswith("riscv"):
             return CpuArchEnum.RISCV
->>>>>>> midstream-cuda-v0.11.0.0
 
         return CpuArchEnum.OTHER if machine else CpuArchEnum.UNKNOWN
 
