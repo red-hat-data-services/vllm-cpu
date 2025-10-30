@@ -15,9 +15,15 @@ torch==2.7.0.dev20250304; platform_machine == "s390x"
 packaging>=24.2
 setuptools>=77.0.3,<80.0.0
 --extra-index-url https://download.pytorch.org/whl/cpu
+<<<<<<< HEAD
 torch==2.6.0+cpu; platform_machine == "x86_64" # torch>2.6.0+cpu has performance regression on x86 platform, see https://github.com/pytorch/pytorch/pull/151218
 torch==2.7.0; platform_system == "Darwin"
 torch==2.7.0; platform_machine == "ppc64le" or platform_machine == "aarch64" or platform_machine == "s390x"
+=======
+torch==2.8.0+cpu; platform_machine == "x86_64"
+torch==2.8.0; platform_system == "Darwin"
+torch==2.8.0; platform_machine == "ppc64le" or platform_machine == "aarch64"
+>>>>>>> e7b62465c (Fix s390x build script for outlines core)
 
 >>>>>>> 9a3071900 (This is to have a single Dockerfile that builds vllm-cpu for both IBM)
 # required for the image processor of minicpm-o-2_6, this must be updated alongside torch
