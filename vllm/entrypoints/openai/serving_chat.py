@@ -6,7 +6,7 @@ import json
 import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from collections.abc import Sequence as GenericSequence
-from typing import TYPE_CHECKING, Callable, Final, Optional, Union
+from typing import Callable, Final, Optional, Union
 
 import jinja2
 import partial_json_parser
@@ -43,10 +43,10 @@ from vllm.entrypoints.openai.tool_parsers.mistral_tool_parser import (
 from vllm.entrypoints.utils import get_max_tokens
 from vllm.inputs.data import TokensPrompt as EngineTokensPrompt
 from vllm.logger import init_logger
+from vllm.logprobs import Logprob
 from vllm.outputs import CompletionOutput, RequestOutput
 from vllm.reasoning import ReasoningParser, ReasoningParserManager
 from vllm.sampling_params import BeamSearchParams, SamplingParams
-from vllm.sequence import Logprob
 from vllm.transformers_utils.tokenizer import AnyTokenizer, MistralTokenizer
 from vllm.transformers_utils.tokenizers import (maybe_serialize_tool_calls,
                                                 truncate_tool_call_ids,
@@ -68,6 +68,7 @@ class OpenAIServingChat(OpenAIServing):
         request_logger: Optional[RequestLogger],
         chat_template: Optional[str],
         chat_template_content_format: ChatTemplateContentFormatOption,
+        trust_request_chat_template: bool = False,
         return_tokens_as_token_ids: bool = False,
         reasoning_parser: str = "",
         enable_auto_tools: bool = False,
@@ -76,17 +77,20 @@ class OpenAIServingChat(OpenAIServing):
         enable_prompt_tokens_details: bool = False,
         enable_force_include_usage: bool = False,
         enable_log_outputs: bool = False,
+        log_error_stack: bool = False,
     ) -> None:
         super().__init__(engine_client=engine_client,
                          model_config=model_config,
                          models=models,
                          request_logger=request_logger,
                          return_tokens_as_token_ids=return_tokens_as_token_ids,
-                         enable_force_include_usage=enable_force_include_usage)
+                         enable_force_include_usage=enable_force_include_usage,
+                         log_error_stack=log_error_stack)
 
         self.response_role = response_role
         self.chat_template = chat_template
         self.chat_template_content_format: Final = chat_template_content_format
+        self.trust_request_chat_template = trust_request_chat_template
         self.enable_log_outputs = enable_log_outputs
 
         # set up tool use
@@ -184,9 +188,9 @@ class OpenAIServingChat(OpenAIServing):
             lora_request = self._maybe_get_adapters(
                 request, supports_default_mm_loras=True)
 
-            model_name = self._get_model_name(request.model, lora_request)
+            model_name = self.models.model_name(lora_request)
 
-            tokenizer = await self.engine_client.get_tokenizer(lora_request)
+            tokenizer = await self.engine_client.get_tokenizer()
 
             tool_parser = self.tool_parser
 
@@ -218,6 +222,16 @@ class OpenAIServingChat(OpenAIServing):
 
             if not self.use_harmony:
                 # Common case.
+                request_chat_template = request.chat_template
+                chat_template_kwargs = request.chat_template_kwargs
+                if not self.trust_request_chat_template and (
+                        request_chat_template is not None or
+                    (chat_template_kwargs and
+                     chat_template_kwargs.get("chat_template") is not None)):
+                    return self.create_error_response(
+                        "Chat template is passed with request, but "
+                        "--trust-request-chat-template is not set. "
+                        "Refused request with untrusted chat template.")
                 (
                     conversation,
                     request_prompts,
@@ -226,7 +240,7 @@ class OpenAIServingChat(OpenAIServing):
                     request,
                     tokenizer,
                     request.messages,
-                    chat_template=request.chat_template or self.chat_template,
+                    chat_template=request_chat_template or self.chat_template,
                     chat_template_content_format=self.
                     chat_template_content_format,
                     add_generation_prompt=request.add_generation_prompt,
@@ -235,7 +249,6 @@ class OpenAIServingChat(OpenAIServing):
                     documents=request.documents,
                     chat_template_kwargs=request.chat_template_kwargs,
                     tool_parser=tool_parser,
-                    truncate_prompt_tokens=request.truncate_prompt_tokens,
                     add_special_tokens=request.add_special_tokens,
                 )
             else:
@@ -827,9 +840,6 @@ class OpenAIServingChat(OpenAIServing):
                             history_tool_call_cnt += 1
                             tools_streamed[i] = True
 
-                        # update the previous values for the next iteration
-                        previous_texts[i] = current_text
-
                     # handle streaming deltas for tools with "auto" tool choice
                     # and reasoning parser
                     elif tool_choice_auto and self.reasoning_parser:
@@ -935,7 +945,8 @@ class OpenAIServingChat(OpenAIServing):
                         delta_message = DeltaMessage(content=delta_text)
 
                     # update the previous values for the next iteration
-                    if tool_choice_auto or self.reasoning_parser:
+                    if ((tool_choice_auto or self.reasoning_parser)
+                            and not self.use_harmony):
                         assert previous_texts is not None
                         assert all_previous_token_ids is not None
                         previous_texts[i] = current_text
@@ -994,7 +1005,7 @@ class OpenAIServingChat(OpenAIServing):
                         # check to make sure we haven't "forgotten" to stream
                         #   any tokens that were generated but previously
                         #   matched by partial json parsing
-                        # only happens if we are NOT using guided decoding
+                        # only happens if we are NOT using structured outputs
                         auto_tools_called = False
                         if tool_parser:
                             auto_tools_called = len(
@@ -1172,6 +1183,7 @@ class OpenAIServingChat(OpenAIServing):
         for output in final_res.outputs:
             token_ids = output.token_ids
             out_logprobs = output.logprobs
+            tool_call_info = None
 
             if request.logprobs and request.top_logprobs is not None:
                 assert out_logprobs is not None, "Did not output logprobs"
@@ -1186,32 +1198,39 @@ class OpenAIServingChat(OpenAIServing):
                 logprobs = None
 
             if self.use_harmony:
-                if TYPE_CHECKING:
-                    assert self.tool_parser is not None
-                tool_parser = self.tool_parser(tokenizer)
-                # NOTE: We use token_ids for openai tool parser
-                tool_call_info = tool_parser.extract_tool_calls(
-                    "",
-                    request=request,
-                    token_ids=token_ids,  # type: ignore
-                )
-                reasoning_content, content = None, tool_call_info.content
-                if request.include_reasoning:
-                    reasoning_content, content, _ = parse_chat_output(
-                        token_ids)
-                message = ChatMessage(
-                    role=role,
-                    reasoning_content=reasoning_content,
-                    content=content,
-                    tool_calls=tool_call_info.tool_calls,
-                )
+                reasoning_content, content, _ = parse_chat_output(token_ids)
+                if not request.include_reasoning:
+                    reasoning_content = None
+
+                if self.tool_parser is not None:
+                    tool_parser = self.tool_parser(tokenizer)
+                    # NOTE: We use token_ids for openai tool parser
+                    tool_call_info = tool_parser.extract_tool_calls(
+                        "",
+                        request=request,
+                        token_ids=token_ids,  # type: ignore
+                    )
+                    content = tool_call_info.content
+                    message = ChatMessage(
+                        role=role,
+                        reasoning_content=reasoning_content,
+                        content=content,
+                        tool_calls=tool_call_info.tool_calls,
+                    )
+                else:
+                    message = ChatMessage(
+                        role=role,
+                        reasoning_content=reasoning_content,
+                        content=content,
+                    )
 
                 choice_data = ChatCompletionResponseChoice(
                     index=output.index,
                     message=message,
                     logprobs=logprobs,
-                    finish_reason="tool_calls"
-                    if tool_call_info.tools_called else
+                    finish_reason="tool_calls" if
+                    (tool_call_info is not None
+                     and tool_call_info.tools_called) else
                     output.finish_reason if output.finish_reason else "stop",
                     stop_reason=output.stop_reason,
                 )
@@ -1475,9 +1494,10 @@ class OpenAIServingChat(OpenAIServing):
             step_top_logprobs = top_logprobs[i]
             if step_top_logprobs is None or step_top_logprobs.get(
                     token_id) is None:
-                token = tokenizer.decode(token_id)
                 if should_return_as_token_id:
                     token = f"token_id:{token_id}"
+                else:
+                    token = tokenizer.decode(token_id)
 
                 logprobs_content.append(
                     ChatCompletionLogProbsContent(
@@ -1555,7 +1575,9 @@ class OpenAIServingChat(OpenAIServing):
         sys_msg = get_system_message(
             reasoning_effort=request.reasoning_effort,
             browser_description=None,
-            python_description=None)
+            python_description=None,
+            with_custom_tools=request.tools is not None
+            )
         messages.append(sys_msg)
 
         # Add developer message.
@@ -1569,4 +1591,9 @@ class OpenAIServingChat(OpenAIServing):
         # Render prompt token ids.
         prompt_token_ids = render_for_completion(messages)
         engine_prompt = EngineTokensPrompt(prompt_token_ids=prompt_token_ids)
+
+        # Add cache_salt if provided in the request
+        if request.cache_salt is not None:
+            engine_prompt["cache_salt"] = request.cache_salt
+
         return messages, [prompt_token_ids], [engine_prompt]
