@@ -1584,16 +1584,9 @@ class AssistantTracker(jinja2.ext.Extension):
         return call_block.set_lineno(lineno)
 
 
-def resolve_chat_template_kwargs(
-    tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+def _resolve_chat_template_kwargs(
     chat_template: str,
-    chat_template_kwargs: dict[str, Any],
-) -> dict[str, Any]:
-    fn_kw = {
-        k for k in chat_template_kwargs
-        if supports_kw(tokenizer.apply_chat_template, k, allow_var_kwargs=False)
-    }
-
+):
     env = jinja2.sandbox.ImmutableSandboxedEnvironment(
         trim_blocks=True,
         lstrip_blocks=True,
@@ -1631,9 +1624,7 @@ def resolve_chat_template_kwargs(
     }
     template_vars = _cached_resolve_chat_template_kwargs(chat_template)
     accept_vars = (fn_kw | template_vars) - unexpected_vars
-    return {
-        k: v for k, v in chat_template_kwargs.items() if k in accept_vars
-    }
+    return {k: v for k, v in chat_template_kwargs.items() if k in accept_vars}
 
 
 def apply_hf_chat_template(
