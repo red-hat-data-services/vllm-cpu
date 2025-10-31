@@ -39,10 +39,11 @@ ENV CUDA_HOME="/usr/local/cuda-${CUDA_MAJOR}.${CUDA_MINOR}"
 ENV PATH="${CUDA_HOME}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${CUDA_HOME}/lib64/stubs/:${CUDA_HOME}/extras/CUPTI/lib64"
 RUN microdnf install -y --nodocs \
-        # cuobjdump , nvcc and nvrtc and are required by deepgemm for JIT
+        # cuobjdump, nvcc and nvrtc and cudart-devel are required by deepgemm for JIT
         cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR} \
         cuda-nvcc-${CUDA_MAJOR}-${CUDA_MINOR} \
         cuda-nvrtc-${CUDA_MAJOR}-${CUDA_MINOR} \
+        cuda-cudart-devel-${CUDA_MAJOR}-${CUDA_MINOR} \
     && microdnf clean all
 
 ## Python Installer ############################################################
