@@ -110,6 +110,10 @@ RUN umask 002 && \
     mkdir -p /home/vllm && \
     chmod g+rwx /home/vllm
 
+ENV TIKTOKEN_CACHE_DIR=/home/vllm/tiktoken_cache
+RUN --mount=type=bind,src=tools/predownload_tiktoken_tokenizers.py,target=predownload_tiktoken_tokenizers.py \
+    python predownload_tiktoken_tokenizers.py
+
 USER 2000
 WORKDIR /home/vllm
 
