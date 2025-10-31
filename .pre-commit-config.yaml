@@ -21,7 +21,7 @@ repos:
   - id: ruff-format
     files: ^(.buildkite|benchmarks|examples)/.*
 - repo: https://github.com/crate-ci/typos
-  rev: v1.35.5
+  rev: v1.39.0
   hooks:
   - id: typos
     exclude: 'Dockerfile\.rocm\.ubi'
