@@ -77,10 +77,7 @@ class CpuArchEnum(enum.Enum):
     ARM = enum.auto()
     POWERPC = enum.auto()
     S390X = enum.auto()
-<<<<<<< HEAD
-=======
     RISCV = enum.auto()
->>>>>>> midstream-cuda-v0.11.0.1
     OTHER = enum.auto()
     UNKNOWN = enum.auto()
 
