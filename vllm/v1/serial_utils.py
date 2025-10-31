@@ -7,7 +7,7 @@ import pickle
 from collections.abc import Sequence
 from inspect import isclass
 from types import FunctionType
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import cloudpickle
 import msgspec
@@ -18,12 +18,15 @@ from msgspec import msgpack
 
 from vllm import envs
 from vllm.logger import init_logger
+# yapf: disable
 from vllm.multimodal.inputs import (BaseMultiModalField,
                                     MultiModalBatchedField,
                                     MultiModalFieldConfig, MultiModalFieldElem,
                                     MultiModalFlatField, MultiModalKwargs,
                                     MultiModalKwargsItem,
+                                    MultiModalKwargsItems,
                                     MultiModalSharedField, NestedTensors)
+# yapf: enable
 from vllm.v1.engine import UtilityResult
 
 logger = init_logger(__name__)
@@ -54,6 +57,42 @@ def _typestr(val: Any) -> Optional[tuple[str, str]]:
         return None
     t = type(val)
     return t.__module__, t.__qualname__
+
+
+def _encode_type_info_recursive(obj: Any) -> Any:
+    """Recursively encode type information for nested structures of
+    lists/dicts."""
+    if obj is None:
+        return None
+    if type(obj) is list:
+        return [_encode_type_info_recursive(item) for item in obj]
+    if type(obj) is dict:
+        return {k: _encode_type_info_recursive(v) for k, v in obj.items()}
+    return _typestr(obj)
+
+
+def _decode_type_info_recursive(
+        type_info: Any, data: Any, convert_fn: Callable[[Sequence[str], Any],
+                                                        Any]) -> Any:
+    """Recursively decode type information for nested structures of
+    lists/dicts."""
+    if type_info is None:
+        return data
+    if isinstance(type_info, dict):
+        assert isinstance(data, dict)
+        return {
+            k: _decode_type_info_recursive(type_info[k], data[k], convert_fn)
+            for k in type_info
+        }
+    if isinstance(type_info, list) and (
+            # Exclude serialized tensors/numpy arrays.
+            len(type_info) != 2 or not isinstance(type_info[0], str)):
+        assert isinstance(data, list)
+        return [
+            _decode_type_info_recursive(ti, d, convert_fn)
+            for ti, d in zip(type_info, data)
+        ]
+    return convert_fn(type_info, data)
 
 
 class MsgpackEncoder:
@@ -116,23 +155,20 @@ class MsgpackEncoder:
         if isinstance(obj, MultiModalKwargsItem):
             return self._encode_mm_item(obj)
 
+        if isinstance(obj, MultiModalKwargsItems):
+            return self._encode_mm_items(obj)
+
         if isinstance(obj, MultiModalKwargs):
-            return [
-                self._encode_mm_item(item)
-                for itemlist in obj._items_by_modality.values()
-                for item in itemlist
-            ]
+            return self._encode_mm_kwargs(obj)
 
         if isinstance(obj, UtilityResult):
             result = obj.result
             if not envs.VLLM_ALLOW_INSECURE_SERIALIZATION:
                 return None, result
-            # Since utility results are not strongly typed, we also encode
-            # the type (or a list of types in the case it's a list) to
-            # help with correct msgspec deserialization.
-            return _typestr(result) if type(result) is not list else [
-                _typestr(v) for v in result
-            ], result
+            # Since utility results are not strongly typed, we recursively
+            # encode type information for nested structures of lists/dicts
+            # to help with correct msgspec deserialization.
+            return _encode_type_info_recursive(result), result
 
         if not envs.VLLM_ALLOW_INSECURE_SERIALIZATION:
             raise TypeError(f"Object of type {type(obj)} is not serializable"
@@ -183,6 +219,12 @@ class MsgpackEncoder:
         dtype = str(obj.dtype).removeprefix("torch.")
         return dtype, obj.shape, data
 
+    def _encode_mm_items(self, items: MultiModalKwargsItems) -> dict[str, Any]:
+        return {
+            modality: [self._encode_mm_item(item) for item in itemlist]
+            for modality, itemlist in items.items()
+        }
+
     def _encode_mm_item(self,
                         item: MultiModalKwargsItem) -> list[dict[str, Any]]:
         return [self._encode_mm_field_elem(elem) for elem in item.values()]
@@ -198,6 +240,12 @@ class MsgpackEncoder:
                      self._encode_nested_tensors(elem.data)),
             "field":
             self._encode_mm_field(elem.field),
+        }
+
+    def _encode_mm_kwargs(self, kw: MultiModalKwargs) -> dict[str, Any]:
+        return {
+            modality: self._encode_nested_tensors(data)
+            for modality, data in kw.items()
         }
 
     def _encode_nested_tensors(self, nt: NestedTensors) -> Any:
@@ -260,8 +308,10 @@ class MsgpackDecoder:
                 return slice(*obj)
             if issubclass(t, MultiModalKwargsItem):
                 return self._decode_mm_item(obj)
+            if issubclass(t, MultiModalKwargsItems):
+                return self._decode_mm_items(obj)
             if issubclass(t, MultiModalKwargs):
-                return MultiModalKwargs(self._decode_mm_items(obj))
+                return self._decode_mm_kwargs(obj)
             if t is UtilityResult:
                 return self._decode_utility_result(obj)
         return obj
@@ -272,15 +322,9 @@ class MsgpackDecoder:
             if not envs.VLLM_ALLOW_INSECURE_SERIALIZATION:
                 raise TypeError("VLLM_ALLOW_INSECURE_SERIALIZATION must "
                                 "be set to use custom utility result types")
-            assert isinstance(result_type, list)
-            if len(result_type) == 2 and isinstance(result_type[0], str):
-                result = self._convert_result(result_type, result)
-            else:
-                assert isinstance(result, list)
-                result = [
-                    self._convert_result(rt, r)
-                    for rt, r in zip(result_type, result)
-                ]
+            # Use recursive decoding to handle nested structures
+            result = _decode_type_info_recursive(result_type, result,
+                                                 self._convert_result)
         return UtilityResult(result)
 
     def _convert_result(self, result_type: Sequence[str], result: Any) -> Any:
@@ -315,8 +359,11 @@ class MsgpackDecoder:
         # Convert back to proper shape & type
         return arr.view(torch_dtype).view(shape)
 
-    def _decode_mm_items(self, obj: list[Any]) -> list[MultiModalKwargsItem]:
-        return [self._decode_mm_item(v) for v in obj]
+    def _decode_mm_items(self, obj: dict[str, Any]) -> MultiModalKwargsItems:
+        return MultiModalKwargsItems({
+            modality: [self._decode_mm_item(item) for item in itemlist]
+            for modality, itemlist in obj.items()
+        })
 
     def _decode_mm_item(self, obj: list[Any]) -> MultiModalKwargsItem:
         return MultiModalKwargsItem.from_elems(
@@ -338,6 +385,12 @@ class MsgpackDecoder:
 
         obj["field"] = factory_meth(None, *field_args).field
         return MultiModalFieldElem(**obj)
+
+    def _decode_mm_kwargs(self, obj: dict[str, Any]) -> MultiModalKwargs:
+        return MultiModalKwargs({
+            modality: self._decode_nested_tensors(data)
+            for modality, data in obj.items()
+        })
 
     def _decode_nested_tensors(self, obj: Any) -> NestedTensors:
         if isinstance(obj, (int, float)):
