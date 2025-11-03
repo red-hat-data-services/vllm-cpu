@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """ helper utility to use tiktoken to pre-download tokenizer files
 
 This is useful for disconnected environments in which internet
