@@ -844,9 +844,11 @@ class MultiModalContentParser(BaseMultiModalContentParser):
             allowed_media_domains=tracker.allowed_media_domains,
         )
 
-    def parse_image(
-        self, image_url: Optional[str], uuid: Optional[str] = None
-    ) -> None:
+    @property
+    def model_config(self) -> ModelConfig:
+        return self._tracker.model_config
+
+    def parse_image(self, image_url: str | None, uuid: str | None = None) -> None:
         image = self._connector.fetch_image(image_url) if image_url else None
 
         placeholder = self._tracker.add("image", image, uuid)
@@ -857,6 +859,12 @@ class MultiModalContentParser(BaseMultiModalContentParser):
         image_embeds: Union[str, dict[str, str], None],
         uuid: Optional[str] = None,
     ) -> None:
+        mm_config = self.model_config.get_multimodal_config()
+        if not mm_config.enable_mm_embeds:
+            raise ValueError(
+                "You must set `--enable-mm-embeds` to input `image_embeds`"
+            )
+
         if isinstance(image_embeds, dict):
             embeds = {
                 k: self._connector.fetch_image_embedding(v)
@@ -929,12 +937,12 @@ class AsyncMultiModalContentParser(BaseMultiModalContentParser):
             allowed_media_domains=tracker.allowed_media_domains,
         )
 
-    def parse_image(
-        self, image_url: Optional[str], uuid: Optional[str] = None
-    ) -> None:
-        image_coro = (
-            self._connector.fetch_image_async(image_url) if image_url else None
-        )
+    @property
+    def model_config(self) -> ModelConfig:
+        return self._tracker.model_config
+
+    def parse_image(self, image_url: str | None, uuid: str | None = None) -> None:
+        image_coro = self._connector.fetch_image_async(image_url) if image_url else None
 
         placeholder = self._tracker.add("image", image_coro, uuid)
         self._add_placeholder("image", placeholder)
@@ -944,9 +952,13 @@ class AsyncMultiModalContentParser(BaseMultiModalContentParser):
         image_embeds: Union[str, dict[str, str], None],
         uuid: Optional[str] = None,
     ) -> None:
-        future: asyncio.Future[Union[str, dict[str, str], None]] = (
-            asyncio.Future()
-        )
+        mm_config = self.model_config.get_multimodal_config()
+        if not mm_config.enable_mm_embeds:
+            raise ValueError(
+                "You must set `--enable-mm-embeds` to input `image_embeds`"
+            )
+
+        future: asyncio.Future[str | dict[str, str] | None] = asyncio.Future()
 
         if isinstance(image_embeds, dict):
             embeds = {
@@ -1572,16 +1584,9 @@ class AssistantTracker(jinja2.ext.Extension):
         return call_block.set_lineno(lineno)
 
 
-def resolve_chat_template_kwargs(
-    tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+def _resolve_chat_template_kwargs(
     chat_template: str,
-    chat_template_kwargs: dict[str, Any],
-) -> dict[str, Any]:
-    fn_kw = {
-        k for k in chat_template_kwargs
-        if supports_kw(tokenizer.apply_chat_template, k, allow_var_kwargs=False)
-    }
-
+):
     env = jinja2.sandbox.ImmutableSandboxedEnvironment(
         trim_blocks=True,
         lstrip_blocks=True,
@@ -1589,14 +1594,37 @@ def resolve_chat_template_kwargs(
     )
     parsed_content = env.parse(chat_template)
     template_vars = jinja2.meta.find_undeclared_variables(parsed_content)
+    return template_vars
 
+
+_cached_resolve_chat_template_kwargs = lru_cache(_resolve_chat_template_kwargs)
+
+
+def resolve_chat_template_kwargs(
+    tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+    chat_template: str,
+    chat_template_kwargs: dict[str, Any],
+    raise_on_unexpected: bool = True,
+) -> dict[str, Any]:
     # We exclude chat_template from kwargs here, because
     # chat template has been already resolved at this stage
-    unexpected_vars = {"chat_template"}
-    accept_vars = (fn_kw | template_vars) - unexpected_vars
-    return {
-        k: v for k, v in chat_template_kwargs.items() if k in accept_vars
+    unexpected_vars = {"chat_template", "tokenize"}
+    if raise_on_unexpected and (
+        unexpected_in_kwargs := unexpected_vars & chat_template_kwargs.keys()
+    ):
+        raise ValueError(
+            "Found unexpected chat template kwargs from request: "
+            f"{unexpected_in_kwargs}"
+        )
+
+    fn_kw = {
+        k
+        for k in chat_template_kwargs
+        if supports_kw(tokenizer.apply_chat_template, k, allow_var_kwargs=False)
     }
+    template_vars = _cached_resolve_chat_template_kwargs(chat_template)
+    accept_vars = (fn_kw | template_vars) - unexpected_vars
+    return {k: v for k, v in chat_template_kwargs.items() if k in accept_vars}
 
 
 def apply_hf_chat_template(
@@ -1606,7 +1634,6 @@ def apply_hf_chat_template(
     tools: Optional[list[dict[str, Any]]],
     *,
     model_config: ModelConfig,
-    tokenize: bool = False,  # Different from HF's default
     **kwargs: Any,
 ) -> str:
     hf_chat_template = resolve_hf_chat_template(
@@ -1623,17 +1650,18 @@ def apply_hf_chat_template(
             "does not define one."
         )
 
+    resolved_kwargs = resolve_chat_template_kwargs(
+        tokenizer=tokenizer,
+        chat_template=hf_chat_template,
+        chat_template_kwargs=kwargs,
+    )
+
     try:
-        resolved_kwargs = resolve_chat_template_kwargs(
-            tokenizer=tokenizer,
-            chat_template=hf_chat_template,
-            chat_template_kwargs=kwargs,
-        )
         return tokenizer.apply_chat_template(
             conversation=conversation,  # type: ignore[arg-type]
             tools=tools,  # type: ignore[arg-type]
             chat_template=hf_chat_template,
-            tokenize=tokenize,
+            tokenize=False,
             **resolved_kwargs,
         )
 

@@ -4,8 +4,10 @@
 import ast
 import inspect
 import textwrap
+from collections.abc import Iterable
 from dataclasses import MISSING, Field, field, fields, is_dataclass
-from typing import TYPE_CHECKING, Any, TypeVar
+from itertools import pairwise
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 import regex as re
 
@@ -85,19 +87,6 @@ def get_attr_docs(cls: type[Any]) -> dict[str, str]:
 
     https://davidism.com/mit-license/
     """
-
-    def pairwise(iterable):
-        """
-        Manually implement https://docs.python.org/3/library/itertools.html#itertools.pairwise
-
-        Can be removed when Python 3.9 support is dropped.
-        """
-        iterator = iter(iterable)
-        a = next(iterator, None)
-
-        for b in iterator:
-            yield a, b
-            a = b
 
     try:
         cls_node = ast.parse(textwrap.dedent(inspect.getsource(cls))).body[0]

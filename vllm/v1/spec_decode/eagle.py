@@ -844,6 +844,19 @@ class EagleProposer:
         else:
             self.draft_indexer_metadata_builder = None
 
+        if self.indexer_layer_names:
+            first_layer = self.indexer_layer_names[0]
+            self.draft_indexer_metadata_builder = (
+                indexer_layers[first_layer].get_attn_backend().get_builder_cls(
+                )(
+                    indexer_layers[first_layer].get_kv_cache_spec(),
+                    self.indexer_layer_names,
+                    self.vllm_config,
+                    self.device,
+                ))
+        else:
+            self.draft_indexer_metadata_builder = None
+
         if supports_multimodal(target_model):
             # handle multimodality
             self.model.config.image_token_index = (
