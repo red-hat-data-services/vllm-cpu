@@ -131,7 +131,11 @@ RUN umask 002 && \
     mkdir -p /licenses /home/vllm && \
     chmod g+rwx /home/vllm
 
-ENV TIKTOKEN_CACHE_DIR=/home/vllm/tiktoken_cache
+# pre-download tiktoken/harmony tokenizer for disconnected environments
+# openai_harmony uses TIKTOKEN_RS_CACHE_DIR
+# while the python tiktoken module uses TIKTOKEN_CACHE_DIR
+ENV TIKTOKEN_CACHE_DIR=${HOME}/.cache/tiktoken
+ENV TIKTOKEN_RS_CACHE_DIR=${TIKTOKEN_CACHE_DIR}
 RUN --mount=type=bind,src=tools/predownload_tiktoken_tokenizers.py,target=predownload_tiktoken_tokenizers.py \
     python predownload_tiktoken_tokenizers.py
 
