@@ -6,7 +6,7 @@ from typing import Optional
 from vllm.v1.core.block_pool import BlockPool
 from vllm.v1.core.kv_cache_utils import BlockHash, KVCacheBlock
 from vllm.v1.core.single_type_kv_cache_manager import (
-    CrossAttentionManager, FullAttentionManager, get_manager_for_kv_cache_spec)
+    FullAttentionManager, get_manager_for_kv_cache_spec)
 from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheConfig,
                                         KVCacheSpec)
 from vllm.v1.request import Request
@@ -24,7 +24,6 @@ class KVCacheCoordinator(ABC):
         use_eagle: bool,
         enable_caching: bool,
         enable_kv_cache_events: bool,
-        dcp_world_size: int,
     ):
         self.kv_cache_config = kv_cache_config
         self.max_model_len = max_model_len
@@ -40,14 +39,12 @@ class KVCacheCoordinator(ABC):
                 kv_cache_spec=kv_cache_group.kv_cache_spec,
                 block_pool=self.block_pool,
                 kv_cache_group_id=i,
-                dcp_world_size=dcp_world_size,
             ) for i, kv_cache_group in enumerate(
                 self.kv_cache_config.kv_cache_groups))
 
-    def get_num_blocks_to_allocate(self, request_id: str, num_tokens: int,
-                                   new_computed_blocks: tuple[
-                                       list[KVCacheBlock], ...],
-                                   num_encoder_tokens: int) -> int:
+    def get_num_blocks_to_allocate(
+            self, request_id: str, num_tokens: int,
+            new_computed_blocks: tuple[list[KVCacheBlock], ...]) -> int:
         """
         Get the number of blocks needed to be allocated for the request.
 
@@ -57,22 +54,14 @@ class KVCacheCoordinator(ABC):
                 tokens that are already allocated).
             new_computed_blocks: The new computed blocks just hitting the
                 prefix caching.
-            num_encoder_tokens: The number of encoder tokens for allocating
-                blocks for cross-attention.
 
         Returns:
             The number of blocks.
         """
         num_blocks_to_allocate = 0
         for i, manager in enumerate(self.single_type_managers):
-            if isinstance(manager, CrossAttentionManager):
-                # For cross-attention, we issue a single static allocation
-                # of blocks based on the number of encoder input tokens.
-                num_blocks_to_allocate += manager.get_num_blocks_to_allocate(
-                    request_id, num_encoder_tokens, [])
-            else:
-                num_blocks_to_allocate += manager.get_num_blocks_to_allocate(
-                    request_id, num_tokens, new_computed_blocks[i])
+            num_blocks_to_allocate += manager.get_num_blocks_to_allocate(
+                request_id, num_tokens, new_computed_blocks[i])
         return num_blocks_to_allocate
 
     def save_new_computed_blocks(
@@ -90,11 +79,8 @@ class KVCacheCoordinator(ABC):
             manager.save_new_computed_blocks(request_id,
                                              new_computed_blocks[i])
 
-    def allocate_new_blocks(
-            self,
-            request_id: str,
-            num_tokens: int,
-            num_encoder_tokens: int = 0) -> tuple[list[KVCacheBlock], ...]:
+    def allocate_new_blocks(self, request_id: str,
+                            num_tokens: int) -> tuple[list[KVCacheBlock], ...]:
         """
         Allocate new blocks for the request to give it at least `num_tokens` 
         token slots.
@@ -103,16 +89,12 @@ class KVCacheCoordinator(ABC):
             request_id: The request ID.
             num_tokens: The total number of tokens that need a slot (including 
                 tokens that are already allocated).
-            num_encoder_tokens: The number of encoder tokens for allocating
-                blocks for cross-attention.
 
         Returns:
             The new allocated blocks.
         """
         return tuple(
-            manager.allocate_new_blocks(
-                request_id, num_encoder_tokens if isinstance(
-                    manager, CrossAttentionManager) else num_tokens)
+            manager.allocate_new_blocks(request_id, num_tokens)
             for manager in self.single_type_managers)
 
     def cache_blocks(self, request: Request, num_computed_tokens: int) -> None:
@@ -121,8 +103,7 @@ class KVCacheCoordinator(ABC):
 
         Args:
             request: The request.
-            num_computed_tokens: The total number of tokens
-                that need to be cached
+            num_tokens: The total number of tokens that need to be cached 
                 (including tokens that are already cached).
         """
         for manager in self.single_type_managers:
@@ -199,14 +180,9 @@ class KVCacheCoordinatorNoPrefixCache(KVCacheCoordinator):
     """
 
     def __init__(self, kv_cache_config: KVCacheConfig, max_model_len: int,
-                 use_eagle: bool, enable_kv_cache_events: bool,
-                 dcp_world_size: int):
-        super().__init__(kv_cache_config,
-                         max_model_len,
-                         use_eagle,
-                         False,
-                         enable_kv_cache_events,
-                         dcp_world_size=dcp_world_size)
+                 use_eagle: bool, enable_kv_cache_events: bool):
+        super().__init__(kv_cache_config, max_model_len, use_eagle, False,
+                         enable_kv_cache_events)
         self.num_single_type_manager = len(self.single_type_managers)
 
     def get_num_common_prefix_blocks(self, request_id: str,
@@ -232,19 +208,12 @@ class UnitaryKVCacheCoordinator(KVCacheCoordinator):
 
     def __init__(self, kv_cache_config: KVCacheConfig, max_model_len: int,
                  use_eagle: bool, enable_caching: bool,
-                 enable_kv_cache_events: bool, dcp_world_size: int):
-        super().__init__(kv_cache_config,
-                         max_model_len,
-                         use_eagle,
-                         enable_caching,
-                         enable_kv_cache_events,
-                         dcp_world_size=dcp_world_size)
+                 enable_kv_cache_events: bool):
+        super().__init__(kv_cache_config, max_model_len, use_eagle,
+                         enable_caching, enable_kv_cache_events)
         self.kv_cache_spec = self.kv_cache_config.kv_cache_groups[
             0].kv_cache_spec
         self.block_size = self.kv_cache_spec.block_size
-        self.dcp_world_size = dcp_world_size
-        if dcp_world_size > 1:
-            self.block_size *= dcp_world_size
         assert len(self.kv_cache_config.kv_cache_groups) == 1, (
             "UnitaryKVCacheCoordinator assumes only one kv cache group")
 
@@ -260,7 +229,6 @@ class UnitaryKVCacheCoordinator(KVCacheCoordinator):
             block_pool=self.block_pool,
             kv_cache_spec=self.kv_cache_spec,
             use_eagle=self.use_eagle,
-            dcp_world_size=self.dcp_world_size,
         )
         return hit_blocks, len(hit_blocks[0]) * self.block_size
 
@@ -276,14 +244,9 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
 
     def __init__(self, kv_cache_config: KVCacheConfig, max_model_len: int,
                  use_eagle: bool, enable_caching: bool,
-                 enable_kv_cache_events: bool, dcp_world_size: int):
-        super().__init__(kv_cache_config,
-                         max_model_len,
-                         use_eagle,
-                         enable_caching,
-                         enable_kv_cache_events,
-                         dcp_world_size=dcp_world_size)
-        assert dcp_world_size == 1, "DCP not support hybrid attn now."
+                 enable_kv_cache_events: bool):
+        super().__init__(kv_cache_config, max_model_len, use_eagle,
+                         enable_caching, enable_kv_cache_events)
         self.verify_and_split_kv_cache_groups()
 
     def verify_and_split_kv_cache_groups(self) -> None:
@@ -414,27 +377,17 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
         return hit_blocks, hit_length
 
 
-def get_kv_cache_coordinator(kv_cache_config: KVCacheConfig,
-                             max_model_len: int, use_eagle: bool,
-                             enable_caching: bool,
-                             enable_kv_cache_events: bool,
-                             dcp_world_size: int) -> KVCacheCoordinator:
+def get_kv_cache_coordinator(
+        kv_cache_config: KVCacheConfig, max_model_len: int, use_eagle: bool,
+        enable_caching: bool,
+        enable_kv_cache_events: bool) -> KVCacheCoordinator:
     if not enable_caching:
-        return KVCacheCoordinatorNoPrefixCache(kv_cache_config,
-                                               max_model_len,
+        return KVCacheCoordinatorNoPrefixCache(kv_cache_config, max_model_len,
                                                use_eagle,
-                                               enable_kv_cache_events,
-                                               dcp_world_size=dcp_world_size)
+                                               enable_kv_cache_events)
     if len(kv_cache_config.kv_cache_groups) == 1:
-        return UnitaryKVCacheCoordinator(kv_cache_config,
-                                         max_model_len,
-                                         use_eagle,
-                                         enable_caching,
-                                         enable_kv_cache_events,
-                                         dcp_world_size=dcp_world_size)
-    return HybridKVCacheCoordinator(kv_cache_config,
-                                    max_model_len,
-                                    use_eagle,
-                                    enable_caching,
-                                    enable_kv_cache_events,
-                                    dcp_world_size=dcp_world_size)
+        return UnitaryKVCacheCoordinator(kv_cache_config, max_model_len,
+                                         use_eagle, enable_caching,
+                                         enable_kv_cache_events)
+    return HybridKVCacheCoordinator(kv_cache_config, max_model_len, use_eagle,
+                                    enable_caching, enable_kv_cache_events)

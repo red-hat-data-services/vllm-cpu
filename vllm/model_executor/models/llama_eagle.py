@@ -28,12 +28,11 @@ class LlamaDecoderLayer(LlamaDecoderLayer):
 
     def __init__(
         self,
-        vllm_config: VllmConfig,
+        config: LlamaConfig,
         disable_input_layernorm: bool,
         prefix: str = "",
-        config: Optional[LlamaConfig] = None,
     ) -> None:
-        super().__init__(vllm_config, prefix=prefix, config=config)
+        super().__init__(config, prefix=prefix)
 
         # Skip the input_layernorm
         # https://github.com/SafeAILab/EAGLE/blob/35c78f6cdc19a73e05cf5c330b4c358dad970c6a/eagle/model/cnets.py#L427
@@ -65,10 +64,9 @@ class LlamaModel(nn.Module):
 
         self.layers = nn.ModuleList([
             LlamaDecoderLayer(
-                vllm_config,
+                self.config,
                 i == 0,
                 prefix=maybe_prefix(prefix, f"layers.{i + start_layer_id}"),
-                config=self.config,
             ) for i in range(self.config.num_hidden_layers)
         ])
         self.fc = torch.nn.Linear(self.config.hidden_size * 2,
@@ -136,11 +134,6 @@ class EagleLlamaForCausalLM(LlamaForCausalLM):
         nn.Module.__init__(self)
         self.config = vllm_config. \
             speculative_config.draft_model_config.hf_config
-        # Ensure draft_vocab_size is set
-        # default to the base vocab size when absent
-        if getattr(self.config, "draft_vocab_size", None) is None:
-            base_vocab_size = getattr(self.config, "vocab_size", None)
-            self.config.draft_vocab_size = base_vocab_size
         target_layer_num = vllm_config.model_config.get_num_layers(
             vllm_config.parallel_config)
         self.model = LlamaModel(vllm_config=vllm_config,
@@ -165,15 +158,14 @@ class EagleLlamaForCausalLM(LlamaForCausalLM):
         return self.model(input_ids, positions, hidden_states)
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]):
-
-        def transform(inputs):
-            name, loaded_weight = inputs
-            if "lm_head" not in name:
-                name = "model." + name
-            return name, loaded_weight
-
         loader = AutoWeightsLoader(
             self,
             skip_prefixes=None,
         )
-        loader.load_weights(map(transform, weights))
+
+        model_weights = {}
+        for name, loaded_weight in weights:
+            if "lm_head" not in name:
+                name = "model." + name
+            model_weights[name] = loaded_weight
+        loader.load_weights(model_weights.items())

@@ -1,18 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 import functools
-from typing import ClassVar, List, Optional
+from typing import List, Optional
 
 import torch
 
 from vllm import envs
-from vllm.attention.backends.abstract import (AttentionBackend,
-                                              AttentionMetadata)
+from vllm.attention.backends.abstract import AttentionBackend
 from vllm.attention.selector import get_attn_backend
 from vllm.config import CacheConfig, QuantizationConfig
 from vllm.v1.attention.backends.utils import (
-    AttentionCGSupport, CommonAttentionMetadata,
-    make_local_attention_virtual_batches, subclass_attention_backend)
+    CommonAttentionMetadata, make_local_attention_virtual_batches,
+    subclass_attention_backend, subclass_attention_metadata_builder)
 
 from ..layer import Attention
 
@@ -25,25 +24,21 @@ def create_chunked_local_attention_backend(
 ) -> type[AttentionBackend]:
     prefix = f"ChunkedLocalAttention_{attention_chunk_size}_{block_size}_"
 
-    underlying_builder = underlying_attn_backend.get_builder_cls()
+    def build_preprocess_fn(cm: CommonAttentionMetadata):
+        return make_local_attention_virtual_batches(attention_chunk_size, cm,
+                                                    block_size)
 
-    class ChunkedLocalAttentionBuilder(underlying_builder):  # type: ignore
-        cudagraph_support: ClassVar[AttentionCGSupport] = \
-            AttentionCGSupport.NEVER
-
-        def build(self,
-                  common_prefix_len: int,
-                  common_attn_metadata: CommonAttentionMetadata,
-                  fast_build: bool = False) -> AttentionMetadata:
-            common_attn_metadata = make_local_attention_virtual_batches(
-                attention_chunk_size, common_attn_metadata, block_size)
-            return super().build(common_prefix_len, common_attn_metadata,
-                                 fast_build)
-
+    # Dynamically create a new attention backend that wraps the
+    # underlying attention backend but applies
+    # `make_local_attention_virtual_batches` before calling `build(...)`
+    builder_cls = subclass_attention_metadata_builder(
+        name_prefix=prefix,
+        builder_cls=underlying_attn_backend.get_builder_cls(),
+        build_preprocess_fn=build_preprocess_fn)
     attn_backend = subclass_attention_backend(
         name_prefix=prefix,
         attention_backend_cls=underlying_attn_backend,
-        builder_cls=ChunkedLocalAttentionBuilder)
+        builder_cls=builder_cls)
 
     return attn_backend
 

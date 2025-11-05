@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 import torch.nn.functional as F
-import torch_xla
+import torch_xla.core.xla_model as xm
 
 from vllm.lora.ops.xla_ops import bgmv_expand, bgmv_expand_slice, bgmv_shrink
 from vllm.lora.punica_wrapper.utils import convert_mapping
@@ -323,7 +323,7 @@ class PunicaWrapperTPU(PunicaWrapperBase):
         extra_vocab_size: int,
     ):
         # Make sure we don't accidentally collect outside operations
-        torch_xla.sync()
+        xm.mark_step()
 
         # Pad the prompt mapping to avoid running into recompiles on the TPU
         # TODO: Should this happen inside mapping internally? If so how can we

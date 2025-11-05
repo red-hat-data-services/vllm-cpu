@@ -14,8 +14,7 @@ from vllm.logger import init_logger
 # yapf: enable
 
 if TYPE_CHECKING:
-    from vllm.config import VllmConfig
-    from vllm.config.kv_transfer import KVTransferConfig
+    from vllm.config import KVTransferConfig, VllmConfig
 
 logger = init_logger(__name__)
 
@@ -106,8 +105,3 @@ KVConnectorFactory.register_connector(
     "MultiConnector",
     "vllm.distributed.kv_transfer.kv_connector.v1.multi_connector",
     "MultiConnector")
-
-KVConnectorFactory.register_connector(
-    "OffloadingConnector",
-    "vllm.distributed.kv_transfer.kv_connector.v1.offloading_connector",
-    "OffloadingConnector")

@@ -40,12 +40,6 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
         layer.register_parameter("weight", weight)
         set_weight_attrs(weight, extra_weight_attrs)
 
-    def process_weights_after_loading(self, layer: torch.nn.Module) -> None:
-        if current_platform.is_cpu():
-            from vllm.model_executor.layers.utils import (
-                dispatch_cpu_unquantized_gemm)
-            dispatch_cpu_unquantized_gemm(layer, remove_weight=False)
-
     def apply(self,
               layer: torch.nn.Module,
               x: torch.Tensor,
@@ -258,7 +252,7 @@ class VocabParallelEmbedding(CustomOp):
 
         if params_dtype is None:
             params_dtype = torch.get_default_dtype()
-        # Divide the weight matrix along the vocabulary dimension.
+        # Divide the weight matrix along the vocaburaly dimension.
         self.num_added_embeddings = self.num_embeddings - self.org_vocab_size
         self.num_embeddings_per_partition = divide(self.num_embeddings_padded,
                                                    self.tp_size)
@@ -399,7 +393,7 @@ class VocabParallelEmbedding(CustomOp):
         param[:loaded_weight.shape[0]].data.copy_(loaded_weight)
         param[loaded_weight.shape[0]:].data.fill_(0)
 
-    def forward_native(self, input_):
+    def forward(self, input_):
         if self.tp_size > 1:
             # Build the mask.
             masked_input, input_mask = get_masked_input_and_mask(
@@ -420,9 +414,6 @@ class VocabParallelEmbedding(CustomOp):
         output = tensor_model_parallel_all_reduce(output_parallel)
         return output
 
-    def forward_cuda(self, input_):
-        return self.forward_native(input_)
-
     def extra_repr(self) -> str:
         s = f"num_embeddings={self.num_embeddings_per_partition}"
         s += f", embedding_dim={self.embedding_dim}"
@@ -432,7 +423,6 @@ class VocabParallelEmbedding(CustomOp):
         return s
 
 
-@CustomOp.register("parallel_lm_head")
 class ParallelLMHead(VocabParallelEmbedding):
     """Parallelized LM head.
 

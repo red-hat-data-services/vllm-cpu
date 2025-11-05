@@ -7,6 +7,7 @@ from typing import Any, Optional, Union
 
 from fastapi import Request
 
+from vllm import envs
 from vllm.config import ModelConfig
 from vllm.engine.protocol import EngineClient
 from vllm.entrypoints.logger import RequestLogger
@@ -46,13 +47,11 @@ class ServingScores(OpenAIServing):
         models: OpenAIServingModels,
         *,
         request_logger: Optional[RequestLogger],
-        log_error_stack: bool = False,
     ) -> None:
         super().__init__(engine_client=engine_client,
                          model_config=model_config,
                          models=models,
-                         request_logger=request_logger,
-                         log_error_stack=log_error_stack)
+                         request_logger=request_logger)
 
     async def _embedding_score(
         self,
@@ -228,7 +227,8 @@ class ServingScores(OpenAIServing):
                              params=default_pooling_params,
                              lora_request=lora_request)
 
-            if (token_type_ids := engine_prompt.pop("token_type_ids", None)):
+            if envs.VLLM_USE_V1 and (token_type_ids := engine_prompt.pop(
+                    "token_type_ids", None)):
                 pooling_params = default_pooling_params.clone()
                 compressed = compress_token_type_ids(token_type_ids)
                 pooling_params.extra_kwargs = {
@@ -266,13 +266,11 @@ class ServingScores(OpenAIServing):
         request: Union[ScoreRequest, RerankRequest],
         request_id: str,
         raw_request: Optional[Request] = None,
+        truncate_prompt_tokens: Optional[int] = None,
     ) -> Union[list[PoolingRequestOutput], ErrorResponse]:
         lora_request = self._maybe_get_adapters(request)
 
-        tokenizer = await self.engine_client.get_tokenizer()
-
-        truncate_prompt_tokens = getattr(request, "truncate_prompt_tokens",
-                                         None)
+        tokenizer = await self.engine_client.get_tokenizer(lora_request)
 
         tokenization_kwargs: dict[str, Any] = {}
         _validate_truncation_size(self.max_model_len, truncate_prompt_tokens,
@@ -345,6 +343,7 @@ class ServingScores(OpenAIServing):
                 request,
                 request_id,
                 raw_request,
+                request.truncate_prompt_tokens,
             )
             if isinstance(final_res_batch, ErrorResponse):
                 return final_res_batch
@@ -353,7 +352,7 @@ class ServingScores(OpenAIServing):
                 final_res_batch,
                 request_id,
                 created_time,
-                self.models.model_name(),
+                self._get_model_name(request.model),
             )
         except asyncio.CancelledError:
             return self.create_error_response("Client disconnected")
@@ -392,6 +391,7 @@ class ServingScores(OpenAIServing):
                 request,
                 request_id,
                 raw_request,
+                request.truncate_prompt_tokens,
             )
             if isinstance(final_res_batch, ErrorResponse):
                 return final_res_batch
@@ -399,7 +399,7 @@ class ServingScores(OpenAIServing):
             return self.request_output_to_rerank_response(
                 final_res_batch,
                 request_id,
-                self.models.model_name(),
+                self._get_model_name(request.model),
                 documents,
                 top_n,
             )

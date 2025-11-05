@@ -474,14 +474,12 @@ def _decode_grouped_att_m_fwd(
 def _fwd_kernel_stage2(
     Mid_O,
     o,
-    lse,
     B_Seqlen,
     stride_mid_ob,
     stride_mid_oh,
     stride_mid_os,
     stride_obs,
     stride_oh,
-    stride_lse_bs,
     NUM_KV_SPLITS: tl.constexpr,
     BLOCK_DV: tl.constexpr,
     Lv: tl.constexpr,
@@ -527,18 +525,12 @@ def _fwd_kernel_stage2(
         acc / e_sum,
         mask=mask_d,
     )
-    lse_val = e_max + tl.log(e_sum)
-    tl.store(
-        lse + cur_batch * stride_lse_bs + cur_head,
-        lse_val,
-    )
 
 
 def _decode_softmax_reducev_fwd(
     logits,
     q,
     o,
-    lse,
     v_buffer,
     b_seq_len,
     num_kv_splits,
@@ -563,14 +555,12 @@ def _decode_softmax_reducev_fwd(
     _fwd_kernel_stage2[grid](
         logits,
         o,
-        lse,
         b_seq_len,
         logits.stride(0),
         logits.stride(1),
         logits.stride(2),
         o.stride(0),
         o.stride(1),
-        lse.stride(0),
         NUM_KV_SPLITS=NUM_KV_SPLITS,
         BLOCK_DV=BLOCK_DV,
         Lv=Lv,
@@ -585,7 +575,6 @@ def decode_attention_fwd_normal(
     k_buffer,
     v_buffer,
     o,
-    lse,
     req_to_token,
     b_seq_len,
     attn_logits,
@@ -606,7 +595,7 @@ def decode_attention_fwd_normal(
         page_size,
         logit_cap,
     )
-    _decode_softmax_reducev_fwd(attn_logits, q, o, lse, v_buffer, b_seq_len,
+    _decode_softmax_reducev_fwd(attn_logits, q, o, v_buffer, b_seq_len,
                                 num_kv_splits)
 
 
@@ -615,7 +604,6 @@ def decode_attention_fwd_grouped(
     k_buffer,
     v_buffer,
     o,
-    lse,
     req_to_token,
     b_seq_len,
     attn_logits,
@@ -636,7 +624,7 @@ def decode_attention_fwd_grouped(
         page_size,
         logit_cap,
     )
-    _decode_softmax_reducev_fwd(attn_logits, q, o, lse, v_buffer, b_seq_len,
+    _decode_softmax_reducev_fwd(attn_logits, q, o, v_buffer, b_seq_len,
                                 num_kv_splits)
 
 
@@ -645,7 +633,6 @@ def decode_attention_fwd(
     k_buffer,
     v_buffer,
     o,
-    lse,
     req_to_token,
     b_seq_len,
     attn_logits,
@@ -664,7 +651,6 @@ def decode_attention_fwd(
             k_buffer,
             v_buffer,
             o,
-            lse,
             req_to_token,
             b_seq_len,
             attn_logits,
@@ -680,7 +666,6 @@ def decode_attention_fwd(
             k_buffer,
             v_buffer,
             o,
-            lse,
             req_to_token,
             b_seq_len,
             attn_logits,

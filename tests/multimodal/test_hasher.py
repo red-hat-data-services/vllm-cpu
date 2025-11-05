@@ -45,11 +45,10 @@ def test_hash_collision_image_transpose():
     assert hasher.hash_kwargs(image=image1) != hasher.hash_kwargs(image=image2)
 
 
-@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
-def test_hash_collision_tensor_shape(dtype):
+def test_hash_collision_tensor_shape():
     # The hash should be different though the data is the same when flattened
-    arr1 = torch.zeros((5, 10, 20, 3), dtype=dtype)
-    arr2 = torch.zeros((10, 20, 5, 3), dtype=dtype)
+    arr1 = torch.zeros((5, 10, 20, 3))
+    arr2 = torch.zeros((10, 20, 5, 3))
 
     hasher = MultiModalHasher
     assert hasher.hash_kwargs(data=arr1) != hasher.hash_kwargs(data=arr2)

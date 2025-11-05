@@ -461,8 +461,7 @@ class MinimaxToolParser(ToolParser):
                 i += 1
         return boundaries
 
-    def _extract_tool_args(self, tool_content: str,
-                           args_match: re.Match[str]) -> str:
+    def _extract_tool_args(self, tool_content: str, args_match) -> str:
         """
         Extract tool arguments from tool content.
         

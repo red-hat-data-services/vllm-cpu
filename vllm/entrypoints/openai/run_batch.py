@@ -14,6 +14,7 @@ import torch
 from prometheus_client import start_http_server
 from tqdm import tqdm
 
+import vllm.envs as envs
 from vllm.config import VllmConfig
 from vllm.engine.arg_utils import AsyncEngineArgs, optional_type
 from vllm.engine.protocol import EngineClient
@@ -160,7 +161,7 @@ async def write_local_file(output_path: str,
     batch_outputs: The list of batch outputs to write.
     """
     # We should make this async, but as long as run_batch runs as a
-    # standalone program, blocking the event loop won't affect performance.
+    # standalone program, blocking the event loop won't effect performance.
     with open(output_path, "w", encoding="utf-8") as f:
         for o in batch_outputs:
             print(o.model_dump_json(), file=f)
@@ -333,7 +334,12 @@ async def run_batch(
 
     model_config = vllm_config.model_config
 
-    supported_tasks = await engine_client.get_supported_tasks()
+    if envs.VLLM_USE_V1:
+        supported_tasks = await engine_client \
+            .get_supported_tasks()  # type: ignore
+    else:
+        supported_tasks = model_config.supported_tasks
+
     logger.info("Supported_tasks: %s", supported_tasks)
 
     # Create the openai serving objects.

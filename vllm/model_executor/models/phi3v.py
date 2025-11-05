@@ -29,19 +29,18 @@ from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
-                                    MultiModalKwargsItems)
+                                    MultiModalKwargs)
 from vllm.multimodal.parse import (ImageEmbeddingItems, ImageProcessorItems,
                                    ImageSize, MultiModalDataItems)
 # yapf conflicts with isort for this block
 # yapf: disable
 from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo,
-                                        MultiModalPromptUpdates,
+                                        BaseProcessingInfo, BoundPromptUpdate,
                                         PlaceholderFeaturesInfo,
-                                        PromptReplacement, PromptUpdate,
-                                        ResolvedPromptUpdate)
+                                        PromptReplacement, PromptUpdate)
 # yapf: enable
 from vllm.multimodal.profiling import BaseDummyInputsBuilder
 from vllm.sequence import IntermediateTensors
@@ -411,7 +410,7 @@ class Phi3VMultiModalProcessor(BaseMultiModalProcessor[Phi3VProcessingInfo]):
         self,
         mm_items: MultiModalDataItems,
         hf_processor_mm_kwargs: Mapping[str, Any],
-        out_mm_kwargs: MultiModalKwargsItems,
+        out_mm_kwargs: MultiModalKwargs,
     ) -> Sequence[PromptUpdate]:
         hf_processor = self.info.get_hf_processor(**hf_processor_mm_kwargs)
         image_tokens: list[str] = hf_processor.img_tokens  # type: ignore
@@ -432,38 +431,24 @@ class Phi3VMultiModalProcessor(BaseMultiModalProcessor[Phi3VProcessingInfo]):
 
             return [_IMAGE_TOKEN_ID] * num_image_tokens
 
+        num_images = mm_items.get_count("image", strict=False)
+
         return [
             PromptReplacement(
                 modality="image",
-                target=image_tokens.__getitem__,
+                target=image_token,
                 replacement=get_replacement_phi3v,
-            )
+            ) for image_token in image_tokens[:num_images]
         ]
-
-    def _recompute_cached_prompt_update(
-        self,
-        cached_update: ResolvedPromptUpdate,
-        new_item_idx: int,
-    ) -> ResolvedPromptUpdate:
-        new_update = super()._recompute_cached_prompt_update(
-            cached_update,
-            new_item_idx,
-        )
-
-        if cached_update.modality == "image":
-            hf_processor = self.info.get_hf_processor()
-            image_tokens: list[str] = hf_processor.img_tokens  # type: ignore
-            new_update = new_update.with_target(image_tokens[new_item_idx])
-
-        return new_update
 
     def _apply_prompt_updates(
         self,
         token_ids: list[int],
-        mm_prompt_updates: MultiModalPromptUpdates,
+        mm_prompt_updates: Mapping[str, Sequence[BoundPromptUpdate]],
+        mm_item_counts: Mapping[str, int],
     ) -> tuple[list[int], str, Mapping[str, list[PlaceholderFeaturesInfo]]]:
         # align to hf behavior when there are images
-        if len(mm_prompt_updates):
+        if len(mm_item_counts):
             tokenizer = self.info.get_tokenizer()
             # to decode token_ids to the original text, we need to
             # 1. remove the first bos token
@@ -499,6 +484,7 @@ class Phi3VMultiModalProcessor(BaseMultiModalProcessor[Phi3VProcessingInfo]):
         token_ids, text, placeholders = super()._apply_prompt_updates(
             token_ids=token_ids,
             mm_prompt_updates=mm_prompt_updates,
+            mm_item_counts=mm_item_counts,
         )
 
         # Keep the behavior in line with HF processor
@@ -680,8 +666,10 @@ class Phi3VForCausalLM(nn.Module, SupportsMultiModal, SupportsPP,
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
+        sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        return self.language_model.compute_logits(hidden_states)
+        return self.language_model.compute_logits(hidden_states,
+                                                  sampling_metadata)
 
     def load_weights(self, weights: Iterable[tuple[str,
                                                    torch.Tensor]]) -> set[str]:

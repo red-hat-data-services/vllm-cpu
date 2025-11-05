@@ -29,15 +29,15 @@ from transformers import BatchFeature, CLIPVisionConfig, SiglipVisionConfig
 from transformers.modeling_utils import no_init_weights
 
 from vllm.config import VllmConfig
+from vllm.inputs import InputProcessingContext
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.multimodal import MULTIMODAL_REGISTRY
-from vllm.multimodal.cache import BaseMultiModalProcessorCache
 from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
-                                    MultiModalKwargsItems)
+                                    MultiModalKwargs)
 from vllm.multimodal.parse import ImageSize, MultiModalDataItems
 from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo,
-                                        InputProcessingContext,
+                                        BaseProcessingInfo, ProcessingCache,
                                         PromptReplacement, PromptUpdate)
 from vllm.multimodal.profiling import BaseDummyInputsBuilder
 from vllm.sequence import IntermediateTensors
@@ -45,28 +45,12 @@ from vllm.sequence import IntermediateTensors
 from .clip import CLIPVisionModel
 from .interfaces import MultiModalEmbeddings, SupportsMultiModal, SupportsPP
 from .siglip import SiglipVisionModel
-from .utils import (AutoWeightsLoader, init_vllm_registered_model,
-                    maybe_prefix, merge_multimodal_embeddings)
+from .utils import AutoWeightsLoader, init_vllm_registered_model, maybe_prefix
 from .vision import get_vision_encoder_info
 
 EOT = "<|endofturn|>"
 IMAGE_TOKEN: str = "<|dummy3|>"
 VIDEO_TOKEN: str = "<|_unuse_missing_100270|>"
-
-
-# Based on combine_frames_into_images in
-# https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Vision-Instruct-3B/blob/main/processing_hyperclovax.py
-def get_num_combined_frames(
-        num_frames: int,
-        max_grid_shape: tuple[int, int] = (3, 3),
-) -> int:
-    max_num_grids = max_grid_shape[0] * max_grid_shape[1]
-
-    # Calculate the number of canvases needed.
-    num_canvases = num_frames // max_num_grids
-    leftover_frames = num_frames % max_num_grids
-
-    return num_canvases + (leftover_frames > 0)
 
 
 class HCXVisionMultimodalPixelInputs(TypedDict):
@@ -188,20 +172,23 @@ class HCXVisionMultiModalProcessor(
         def replace_multimodal_token(
             token_ids: torch.Tensor,
             target_token: int,
-            repeats: list[int],
+            repeats: list,
         ):
-            output = list[int]()
+            output = list()
             _repeats_idx = 0
             for token_id in token_ids:
                 if token_id == target_token:
-                    output += [token_id.item()] * repeats[_repeats_idx]
+                    output += [
+                        token_id.item(),
+                    ] * repeats[_repeats_idx]
                     _repeats_idx += 1
                 else:
-                    output += [token_id.item()]
-
+                    output += [
+                        token_id.item(),
+                    ]
             return torch.tensor(output, device=token_ids.device)
 
-        for video_idx, video_arr in enumerate(mm_data.get("videos", [])):
+        for video_idx, video_arr in enumerate(mm_data.get("videos", list())):
             if video_arr.dtype == np.uint8:
                 continue
             mm_data["videos"][video_idx] = video_arr.astype(np.uint8)
@@ -218,67 +205,87 @@ class HCXVisionMultiModalProcessor(
         if len(mm_data) > 0:
             # batchify input as a single item
             images = mm_data.get("images", None)
-            batched_images = None if images is None else [images]
+            num_images = 0
+            if images is not None:
+                num_images = len(images)
+                images = [
+                    images,
+                ]  # batchify
 
-            # list of video in single conversation
-            videos = mm_data.get("videos", None)
-            batched_videos = None if videos is None else [videos]
+            videos = mm_data.get("videos",
+                                 None)  # list of video in single conversation
+            num_videos = 0
+            if videos is not None:
+                num_videos = len(videos)
+                videos = [
+                    videos,
+                ]  # batchify
 
             _processed_outputs = self.info.ctx.call_hf_processor(
                 hf_processor=self.info.get_hf_processor(**mm_kwargs),
                 data=dict(
                     text=None,
-                    images=batched_images,
-                    videos=batched_videos,
+                    images=images,
+                    videos=videos,
                 ),
             )  # mm-only
 
             for k, v in _processed_outputs.items():
-                if isinstance(v, list) and len(v) > 0:
-                    assert len(v) == 1
+                if len(v) < 1:
+                    continue
+                elif k.endswith("_images"):
+                    # list of list of 4D tensor -> list of 4D tensor
                     _processed_outputs[k] = v[0]
+                elif k.endswith("_videos"):
+                    # list of list of 4D tensor -> list of 4D tensor
+                    v = v[0]
+                    if k == "pixel_values_videos":
+                        v = torch.cat(v, dim=0)
+                        _c, _w, _h = v.shape[-3:]
+                        v = v.reshape(num_videos, -1, _c, _w, _h)
+                        v = list(torch.unbind(v, dim=0))
+                    _processed_outputs[k] = v
 
-            if images:
+            if num_images > 0:
                 tokenizer = self.info.get_tokenizer()
-                image_token_id = tokenizer.convert_tokens_to_ids(IMAGE_TOKEN)
                 processed_outputs["input_ids"] = torch.stack([
                     replace_multimodal_token(
                         token_ids=_input_ids,
-                        target_token=image_token_id,
+                        target_token=tokenizer.convert_tokens_to_ids(
+                            IMAGE_TOKEN),
                         repeats=_processed_outputs[
                             "vision_query_lengths_images"],
                     ) for _input_ids in processed_outputs["input_ids"]
                 ],
                                                              dim=0)
 
-            if videos:
-                _num_per_videos = [
-                    get_num_combined_frames(len(video)) for video in videos
-                ]
-                _processed_outputs["pixel_values_videos"] = [
+            if num_videos > 0:
+                tokenizer = self.info.get_tokenizer()
+                processed_outputs["input_ids"] = torch.stack([
+                    replace_multimodal_token(
+                        token_ids=_input_ids,
+                        target_token=tokenizer.convert_tokens_to_ids(
+                            VIDEO_TOKEN),
+                        repeats=_processed_outputs[
+                            "vision_query_lengths_videos"],
+                    ) for _input_ids in processed_outputs["input_ids"]
+                ],
+                                                             dim=0)
+
+                _ratios = [
+                    len(_pixel_values) for _pixel_values in
                     _processed_outputs["pixel_values_videos"]
-                    [sum(_num_per_videos[:_i]):sum(_num_per_videos[:_i + 1])]
-                    for _i in range(len(videos))
+                ]
+                _num_per_videos = [
+                    int(_e / sum(_ratios) *
+                        len(_processed_outputs["vision_query_lengths_videos"]))
+                    for _e in _ratios
                 ]
                 _processed_outputs["vision_query_lengths_videos"] = [
                     _processed_outputs["vision_query_lengths_videos"]
                     [sum(_num_per_videos[:_i]):sum(_num_per_videos[:_i + 1])]
-                    for _i in range(len(videos))
+                    for _i in range(0, num_videos)
                 ]
-
-                tokenizer = self.info.get_tokenizer()
-                video_token_id = tokenizer.convert_tokens_to_ids(VIDEO_TOKEN)
-                processed_outputs["input_ids"] = torch.stack([
-                    replace_multimodal_token(
-                        token_ids=_input_ids,
-                        target_token=video_token_id,
-                        repeats=[
-                            sum(lens) for lens in
-                            _processed_outputs["vision_query_lengths_videos"]
-                        ],
-                    ) for _input_ids in processed_outputs["input_ids"]
-                ],
-                                                             dim=0)
 
             processed_outputs.update(_processed_outputs)
 
@@ -288,7 +295,7 @@ class HCXVisionMultiModalProcessor(
         self,
         mm_items: MultiModalDataItems,
         hf_processor_mm_kwargs: Mapping[str, object],
-        out_mm_kwargs: MultiModalKwargsItems,
+        out_mm_kwargs: MultiModalKwargs,
     ) -> Sequence[PromptUpdate]:
         hf_config = self.info.get_hf_config()
         placeholder = {
@@ -299,22 +306,21 @@ class HCXVisionMultiModalProcessor(
         def get_replacement_hyperclovax(
             item_idx: int,
             modality: str,
-            out_mm_kwargs: MultiModalKwargsItems,
+            out_mm_kwargs: MultiModalKwargs,
         ):
-            out_item = out_mm_kwargs[modality][item_idx]
-
+            num_tokens = None
             if modality == "image":
-                lens = out_item["vision_query_lengths_images"].data
                 num_tokens = self.info.get_num_image_tokens(
-                    vision_query_length=lens)
-            elif modality == "video":
-                lens = out_item["vision_query_lengths_videos"].data
+                    vision_query_length=out_mm_kwargs[
+                        "vision_query_lengths_images"][item_idx], )
+            if modality == "video":
                 num_tokens = self.info.get_num_video_tokens(
-                    vision_query_length=lens)
-            else:
-                raise NotImplementedError(modality)
-
-            return [placeholder[modality]] * num_tokens
+                    vision_query_length=out_mm_kwargs[
+                        "vision_query_lengths_videos"][item_idx], )
+            assert isinstance(num_tokens, int)
+            return [
+                placeholder[modality],
+            ] * num_tokens
 
         return [
             PromptReplacement(
@@ -368,7 +374,7 @@ def _build_hcxvision_hf_processor(
     info: HCXVisionProcessingInfo,
     dummy_inputs: BaseDummyInputsBuilder[HCXVisionProcessingInfo],
     *,
-    cache: Optional[BaseMultiModalProcessorCache] = None,
+    cache: Optional[ProcessingCache] = None,
 ) -> BaseMultiModalProcessor:
     if isinstance(info, HCXVisionProcessingInfo):
         return HCXVisionMultiModalProcessor(
@@ -740,20 +746,33 @@ class HCXVisionForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
         self,
         input_ids: torch.Tensor,
         multimodal_embeddings: Optional[MultiModalEmbeddings] = None,
+        **kwargs,
     ) -> torch.Tensor:
         inputs_embeds = self.language_model.get_input_embeddings(input_ids)
-        if multimodal_embeddings is not None \
-            and len(multimodal_embeddings) != 0:
-            inputs_embeds = merge_multimodal_embeddings(
-                input_ids,
-                inputs_embeds,
-                multimodal_embeddings,
-                placeholder_token_id=[
-                    self.config.image_token_id,
-                    self.config.video_token_id,
-                ],
-            )
+        if (kwargs.get("pixel_values_images") is not None
+                or kwargs.get("pixel_values_videos")
+                is not None):  # v0 compatibility
+            multimodal_embeddings = self.get_multimodal_embeddings(**kwargs)
+        if multimodal_embeddings is not None:
+            multimodal_embeddings = torch.cat(multimodal_embeddings, dim=0)
+            _mask_image = input_ids == self.config.image_token_id
+            _mask_video = input_ids == self.config.video_token_id
+            assert _mask_image.sum() + _mask_video.sum() == len(
+                multimodal_embeddings)
 
+            if multimodal_embeddings.dtype != inputs_embeds.dtype:
+                multimodal_embeddings = multimodal_embeddings.to(
+                    dtype=inputs_embeds.dtype)
+            if multimodal_embeddings.device != inputs_embeds.device:
+                multimodal_embeddings = multimodal_embeddings.to(
+                    device=inputs_embeds.device)
+
+            if _mask_image.sum() > 0:
+                inputs_embeds[
+                    _mask_image] = multimodal_embeddings[:sum(_mask_image)]
+            if _mask_video.sum() > 0:
+                inputs_embeds[_mask_video] = multimodal_embeddings[
+                    -sum(_mask_video):]
         return inputs_embeds
 
     def forward(
@@ -770,9 +789,8 @@ class HCXVisionForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
         # NOTE: In v1, inputs_embeds is always generated at model runner, this
         # condition is for v0 compatibility.
         elif inputs_embeds is None:
-            multimodal_embeddings = self.get_multimodal_embeddings(**kwargs)
-            inputs_embeds = self.get_input_embeddings(input_ids,
-                                                      multimodal_embeddings)
+            inputs_embeds = self.get_input_embeddings(input_ids=input_ids,
+                                                      **kwargs)
             input_ids = None
         hidden_states = self.language_model.model(input_ids,
                                                   positions,
@@ -918,8 +936,8 @@ class HCXVisionForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
                 target_group_size = 0
 
             elif video_group_size < target_group_size:
-                raise RuntimeError(
-                    f"{video_group_size=} < {target_group_size=}")
+                raise RuntimeError(f"video_group_size < target_group_size!! \
+                        [{video_group_size} < {target_group_size}]")
 
         assert len(target_features
                    ) == 0, f"target_features is not empty!! {target_features}"
@@ -961,8 +979,10 @@ class HCXVisionForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
+        sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        return self.language_model.compute_logits(hidden_states)
+        return self.language_model.compute_logits(hidden_states,
+                                                  sampling_metadata)
 
     def load_weights(
         self,
@@ -1101,8 +1121,9 @@ def reshape_and_unpad_image_features(
     base_image_feature = image_feature[0]
     image_feature = image_feature[1:]
 
-    assert height * width == base_image_feature.shape[0], (
-        f"{height=} * {width=} != {base_image_feature.shape[0]=}")
+    assert (height * width == base_image_feature.shape[0]
+            ), f"height: {height}, width: {width}, \
+        base_image_feature.shape[0]: {base_image_feature.shape[0]}"
 
     num_patch_width, num_patch_height = get_anyres_image_grid_shape(
         image_size, possible_resolutions, grid_size)

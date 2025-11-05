@@ -68,9 +68,9 @@ class LlamaModel(nn.Module):
 
         self.layers = nn.ModuleList([
             Llama4DecoderLayer(
-                vllm_config=vllm_config,
+                self.config,
+                quant_config=quant_config,
                 prefix=maybe_prefix(prefix, f"layers.{i + start_layer_id}"),
-                config=self.config,
             ) for i in range(self.config.num_hidden_layers)
         ])
         self.fc = torch.nn.Linear(self.config.hidden_size * 2,
@@ -205,21 +205,23 @@ class EagleLlama4ForCausalLM(Llama4ForCausalLM):
 
     def load_weights(self, weights: Iterable[tuple[str,
                                                    torch.Tensor]]) -> None:
-
-        def transform(inputs):
-            name, loaded_weight = inputs
-            name, weight = self.permute_qk_weight_for_rotary(
-                name, loaded_weight)
-            if "lm_head" not in name:
-                name = "model." + name
-            return name, weight
-
         loader = AutoWeightsLoader(
             self,
             # lm_head is tied with target model (Llama4ForCausalLM)
             skip_prefixes=(["lm_head."]),
         )
-        loader.load_weights(map(transform, weights))
+
+        model_weights = {}
+        weights = [
+            self.permute_qk_weight_for_rotary(name, loaded_weight)
+            for name, loaded_weight in weights
+        ]
+        for name, loaded_weight in weights:
+            if "lm_head" not in name:
+                name = "model." + name
+            model_weights[name] = loaded_weight
+
+        loader.load_weights(model_weights.items())
 
     def get_input_embeddings(
         self,

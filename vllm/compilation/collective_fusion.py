@@ -10,7 +10,6 @@ from torch._higher_order_ops.auto_functionalize import auto_functionalized
 from torch._inductor.pattern_matcher import PatternMatcherPass
 from torch.distributed._symmetric_memory import enable_symm_mem_for_group
 
-import vllm.envs as envs
 from vllm.config import VllmConfig
 from vllm.distributed import get_tp_group, tensor_model_parallel_all_reduce
 from vllm.distributed.parallel_state import (
@@ -19,8 +18,7 @@ from vllm.logger import init_logger
 from vllm.platforms import current_platform
 from vllm.utils import direct_register_custom_op
 
-from .inductor_pass import enable_fake_mode
-from .vllm_inductor_pass import VllmInductorPass, VllmPatternMatcherPass
+from .vllm_inductor_pass import VllmInductorPass
 
 FP8_DTYPE = current_platform.fp8_dtype()
 
@@ -348,9 +346,8 @@ class AllGatherCutlassScaledMMPattern(BasePattern):
                                 pm.fwd_only, pm_pass)
 
 
-class AsyncTPPass(VllmPatternMatcherPass):
+class AsyncTPPass(VllmInductorPass):
 
-    @enable_fake_mode
     def __init__(self, config: VllmConfig):
         super().__init__(config)
 
@@ -378,17 +375,18 @@ class AsyncTPPass(VllmPatternMatcherPass):
             AllGatherCutlassScaledMMPattern(
                 self.model_dtype, self.device).register(self.patterns)
 
-        self.dump_patterns(config, self.patterns)
-
     def is_applicable_for_shape(self, shape: Optional[int]) -> bool:
         # only do replace for specific shapes
         tp_size = get_tensor_model_parallel_world_size()
         return shape is not None and shape % tp_size == 0
 
-    @VllmInductorPass.time_and_log
     def __call__(self, graph: fx.Graph):
-        self.matched_count = self.patterns.apply(graph)
-        logger.debug("Replaced %s patterns", self.matched_count)
+        self.begin()
+        self.dump_graph(graph, "before_async_tp_pass")
+        count = self.patterns.apply(graph)
+        logger.debug("Replaced %s patterns with async TP pass.", count)
+        self.dump_graph(graph, "after_async_tp_pass")
+        self.end_and_log()
 
 
 if flashinfer_comm is not None:
@@ -403,18 +401,6 @@ if flashinfer_comm is not None:
         6: MiB // 2,  # 512KB
         8: MiB // 2,  # 512KB
     }
-
-    try:
-        _FI_MAX_SIZES.update({
-            int(k): int(float(v) * MiB)
-            for k, v in
-            envs.VLLM_FLASHINFER_ALLREDUCE_FUSION_THRESHOLDS_MB.items()
-        })
-    except Exception as e:
-        raise ValueError(
-            "Failed to parse VLLM_FLASHINFER_ALLREDUCE_FUSION_THRESHOLDS_MB: "
-            + str(e)) from e
-
     # opt for a more conservative default value
     # when world size is not in _FI_MAX_SIZES
     _DEFAULT_FI_MAX_SIZE = MiB // 2
@@ -479,8 +465,7 @@ if flashinfer_comm is not None:
                 quant_out=quant_out,
                 scale_out=scale_out,
                 # in vllm we only support swizzled layout
-                layout_code=flashinfer_comm.QuantizationSFLayout.
-                SWIZZLED_128x4,
+                layout_code=flashinfer_comm.FP4QuantizationSFLayout.SWIZZLED,
                 scale_factor=scale_factor,
             )
         else:
@@ -512,7 +497,7 @@ if flashinfer_comm is not None:
                         torch.ops._C.static_scaled_fp8_quant(
                             quant_out, norm_out, scale_factor)
             if scale_factor is None or norm_out is not None:
-                # we need to return allreduce output
+                # we need to return allreduce outpput
                 # in cases of non quant fused AR + RMS norm
                 # and fused AR + RMS norm + quant without fused add
                 allreduce_in.copy_(allreduce_out)
@@ -547,6 +532,7 @@ if flashinfer_comm is not None:
             "scale_out",
         ],
         fake_impl=call_trtllm_fused_allreduce_norm_fake,
+        dispatch_key=current_platform.dispatch_key,
     )
     flashinfer_trtllm_fused_allreduce_norm = (
         torch.ops.vllm.flashinfer_trtllm_fused_allreduce_norm.default)
@@ -1066,7 +1052,7 @@ class AllReduceFusedAddRMSNormStaticQuantNVFP4Pattern(BasePattern):
                                 pm.fwd_only, pm_pass)
 
 
-class AllReduceFusionPass(VllmPatternMatcherPass):
+class AllReduceFusionPass(VllmInductorPass):
 
     def __init__(self, config: VllmConfig):
         super().__init__(config)
@@ -1121,11 +1107,6 @@ class AllReduceFusionPass(VllmPatternMatcherPass):
             # in fallback path, when we don't use flashinfer
             fuse_rms_quant=config.compilation_config.pass_config.enable_fusion)
 
-        self.register_patterns()
-        self.dump_patterns(config, self.patterns)
-
-    @enable_fake_mode
-    def register_patterns(self):
         for epsilon in [1e-5, 1e-6]:
             AllReduceFusedRMSNormStaticQuantFP8Pattern(
                 epsilon,
@@ -1171,17 +1152,18 @@ class AllReduceFusionPass(VllmPatternMatcherPass):
 
         self.disabled = False
 
-    @VllmInductorPass.time_and_log
     def __call__(self, graph: fx.Graph):
         if self.disabled:
-            logger.debug("AllReduceFusionPass disabled")
             return
-
-        self.matched_count = self.patterns.apply(graph)
-        logger.debug("Replaced %s patterns", self.matched_count)
+        self.begin()
+        self.dump_graph(graph, "before_all_reduce_fusion_pass")
+        count = self.patterns.apply(graph)
+        logger.debug("Replaced %s patterns", count)
+        self.dump_graph(graph, "after_all_reduce_fusion_pass")
+        self.end_and_log()
 
     def __del__(self):
-        if getattr(self, "disabled", True):
+        if self.disabled:
             return
         if flashinfer_comm is not None:
             flashinfer_comm.trtllm_destroy_ipc_workspace_for_all_reduce(

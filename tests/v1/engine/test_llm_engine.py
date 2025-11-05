@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional
 import pytest
 
 from vllm import LLM
-from vllm.sampling_params import SamplingParams, StructuredOutputsParams
+from vllm.sampling_params import GuidedDecodingParams, SamplingParams
 from vllm.v1.metrics.reader import Counter, Gauge, Histogram, Metric, Vector
 
 if TYPE_CHECKING:
@@ -97,7 +97,7 @@ def _get_test_sampling_params(
             top_p=0.95,
             n=n,
             seed=seed,
-            structured_outputs=StructuredOutputsParams(
+            guided_decoding=GuidedDecodingParams(
                 regex="[0-9]+") if structured_outputs else None,
         ) for n in n_list
     ], n_list

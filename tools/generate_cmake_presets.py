@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-import argparse
 import json
 import multiprocessing
 import os
@@ -27,8 +26,7 @@ def get_cpu_cores():
     return multiprocessing.cpu_count()
 
 
-def generate_presets(output_path="CMakeUserPresets.json",
-                     force_overwrite=False):
+def generate_presets(output_path="CMakeUserPresets.json"):
     """Generates the CMakeUserPresets.json file."""
 
     print("Attempting to detect your system configuration...")
@@ -145,15 +143,12 @@ def generate_presets(output_path="CMakeUserPresets.json",
     output_file_path = os.path.join(project_root, output_path)
 
     if os.path.exists(output_file_path):
-        if force_overwrite:
-            print(f"Overwriting existing file '{output_file_path}'")
-        else:
-            overwrite = input(
-                f"'{output_file_path}' already exists. Overwrite? (y/N): "
-            ).strip().lower()
-            if overwrite != 'y':
-                print("Generation cancelled.")
-                return
+        overwrite = input(
+            f"'{output_file_path}' already exists. Overwrite? (y/N): ").strip(
+            ).lower()
+        if overwrite != 'y':
+            print("Generation cancelled.")
+            return
 
     try:
         with open(output_file_path, "w") as f:
@@ -171,12 +166,4 @@ def generate_presets(output_path="CMakeUserPresets.json",
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--force-overwrite",
-        action="store_true",
-        help="Force overwrite existing CMakeUserPresets.json without prompting"
-    )
-
-    args = parser.parse_args()
-    generate_presets(force_overwrite=args.force_overwrite)
+    generate_presets()

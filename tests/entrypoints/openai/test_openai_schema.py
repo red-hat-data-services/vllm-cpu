@@ -102,14 +102,12 @@ def before_generate_case(context: schemathesis.hooks.HookContext, strategy):
                                 if "custom" in tool_call:
                                     return False
 
-            # Sometimes structured_outputs.grammar is generated to be empty
+            # Sometimes guided_grammar is generated to be empty
             # Causing a server error in EBNF grammar parsing
             # https://github.com/vllm-project/vllm/pull/22587#issuecomment-3195253421
-            structured_outputs = case.body.get("structured_outputs", {})
-            grammar = structured_outputs.get("grammar") if isinstance(
-                structured_outputs, dict) else None
+            guided_grammar = case.body.get("guided_grammar")
 
-            if grammar == '':
+            if guided_grammar == '':
                 # Allow None (will be handled as no grammar)
                 # But skip empty strings
                 return False

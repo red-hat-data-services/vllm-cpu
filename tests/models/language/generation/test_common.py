@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+import os
 from typing import Optional
 
 import pytest
@@ -12,11 +13,10 @@ from ...registry import HF_EXAMPLE_MODELS
 from ...utils import check_logprobs_close
 
 # These have unsupported head_dim for FA. We do not
-# have a clean way to fall back, so we fail with
+# not have a clean way to fall back, so we fail with
 # a clear msg when it happens.
 # https://github.com/vllm-project/vllm/issues/14524
-# NOTE(woosuk): Skipping these tests until V1 supports them.
-# REQUIRES_V0 = ["microsoft/phi-2", "stabilityai/stablelm-3b-4e1t"]
+REQUIRES_V0 = ["microsoft/phi-2", "stabilityai/stablelm-3b-4e1t"]
 
 # This list contains the model that are using AITER kernel.
 # Skip model that are not using AITER tests.
@@ -39,7 +39,7 @@ AITER_MODEL_LIST = [
     [
         pytest.param(
             "bigscience/bloom-560m",  # bloom - testing alibi slopes
-            marks=[pytest.mark.core_model, pytest.mark.slow_test],
+            marks=[pytest.mark.core_model],
         ),
         pytest.param(
             "openai-community/gpt2",  # gpt2
@@ -50,10 +50,7 @@ AITER_MODEL_LIST = [
         pytest.param("EleutherAI/pythia-70m"),  # gpt_neox
         pytest.param(
             "google/gemma-1.1-2b-it",  # gemma
-            marks=[
-                pytest.mark.core_model, pytest.mark.cpu_model,
-                pytest.mark.slow_test
-            ],
+            marks=[pytest.mark.core_model, pytest.mark.cpu_model],
         ),
         pytest.param(
             "zai-org/chatglm3-6b",  # chatglm (text-only)
@@ -74,17 +71,14 @@ AITER_MODEL_LIST = [
         ),
         pytest.param(
             "microsoft/phi-2",  # phi
-            marks=[pytest.mark.core_model, pytest.mark.slow_test],
+            marks=[pytest.mark.core_model],
         ),
         pytest.param(
             "Qwen/Qwen-7B-Chat",  # qwen (text-only)
         ),
         pytest.param(
             "Qwen/Qwen2.5-0.5B-Instruct",  # qwen2
-            marks=[
-                pytest.mark.core_model, pytest.mark.cpu_model,
-                pytest.mark.slow_test
-            ],
+            marks=[pytest.mark.core_model, pytest.mark.cpu_model],
         ),
         pytest.param(
             "Qwen/Qwen3-8B",  # qwen (text-only)
@@ -98,21 +92,22 @@ AITER_MODEL_LIST = [
         pytest.param(
             "allenai/OLMoE-1B-7B-0924-Instruct",
             marks=[pytest.mark.cpu_model],
-        ),
-        pytest.param("swiss-ai/Apertus-8B-2509"),  # apertus
+        )
     ])
 @pytest.mark.parametrize("max_tokens", [32])
 @pytest.mark.parametrize("num_logprobs", [5])
 @pytest.mark.parametrize(
     "use_rocm_aiter", [True, False] if current_platform.is_rocm() else [False])
-@pytest.mark.parametrize("use_prompt_embeds", [True, False])
 def test_models(hf_runner, vllm_runner, example_prompts, model: str,
                 max_tokens: int, num_logprobs: int, use_rocm_aiter: bool,
-                use_prompt_embeds: bool, monkeypatch) -> None:
+                monkeypatch) -> None:
 
     model_info = HF_EXAMPLE_MODELS.find_hf_info(model)
     model_info.check_available_online(on_fail="skip")
     model_info.check_transformers_version(on_fail="skip")
+
+    if model in REQUIRES_V0:
+        monkeypatch.setenv("VLLM_USE_V1", "0")
 
     if use_rocm_aiter and (model in AITER_MODEL_LIST):
         monkeypatch.setenv("VLLM_ROCM_USE_AITER", "1")
@@ -122,6 +117,8 @@ def test_models(hf_runner, vllm_runner, example_prompts, model: str,
         # needed as all the models will be calling AITER kernels
         # in parts of the operators
         pytest.skip(f"Skipping '{model}' model test with AITER kernel.")
+
+    use_prompt_embeds = os.getenv("VLLM_USE_V1") == "0"
 
     with hf_runner(model) as hf_model:
         hf_outputs = hf_model.generate_greedy_logprobs_limit(

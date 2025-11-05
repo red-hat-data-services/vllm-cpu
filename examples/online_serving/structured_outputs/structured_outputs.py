@@ -86,7 +86,7 @@ PARAMS: dict[ConstraintsFormat, dict[str, Any]] = {
                 "content": "Classify this sentiment: vLLM is wonderful!",
             }
         ],
-        "extra_body": {"structured_outputs": {"choice": ["positive", "negative"]}},
+        "extra_body": {"guided_choice": ["positive", "negative"]},
     },
     "regex": {
         "messages": [
@@ -96,7 +96,7 @@ PARAMS: dict[ConstraintsFormat, dict[str, Any]] = {
             }
         ],
         "extra_body": {
-            "structured_outputs": {"regex": r"[a-z0-9.]{1,20}@\w{6,10}\.com\n"},
+            "guided_regex": r"[a-z0-9.]{1,20}@\w{6,10}\.com\n",
         },
     },
     "json": {
@@ -122,8 +122,7 @@ PARAMS: dict[ConstraintsFormat, dict[str, Any]] = {
             }
         ],
         "extra_body": {
-            "structured_outputs": {
-                "grammar": """
+            "guided_grammar": """
 root ::= select_statement
 
 select_statement ::= "SELECT " column " from " table " where " condition
@@ -136,7 +135,6 @@ condition ::= column "= " number
 
 number ::= "1 " | "2 "
 """,
-            }
         },
     },
     "structural_tag": {

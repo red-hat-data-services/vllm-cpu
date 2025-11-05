@@ -50,7 +50,6 @@ def forward_attention(
         dtype=torch.int32,
     )
     context_lens = seq_lens - query_lens
-    max_seq_len = int(seq_lens.max())
     max_query_len = q_len
     num_actual_tokens = query_start_loc[-1]
 
@@ -82,7 +81,6 @@ def forward_attention(
         num_reqs=batch_size,
         num_actual_tokens=num_actual_tokens,
         max_query_len=max_query_len,
-        max_seq_len=max_seq_len,
         block_table_tensor=block_table,
         slot_mapping=slot_mapping,
     )
@@ -187,7 +185,7 @@ def test_tree_attn_correctness() -> None:
                         dtype=torch.bfloat16,
                     )
 
-                    # Set up the block table and KV cache for paged KV.
+                    # Setup the block table and KV cache for paged KV.
                     assert max_sequence_length % block_size == 0
                     max_blocks_per_batch = max_sequence_length // block_size
                     kv_cache = torch.randn(
@@ -222,7 +220,7 @@ def test_tree_attn_correctness() -> None:
                                 num_alloc_blocks_per_batch] = block_ids.view(
                                     -1, num_alloc_blocks_per_batch)
 
-                    # Set up the slot mapping for the input KVs.
+                    # Setup the slot mapping for the input KVs.
                     tree_positions = sequence_position + torch.arange(
                         0,
                         tree_size_q,
@@ -278,7 +276,7 @@ def test_tree_attn_correctness() -> None:
                             block_table=block_table,
                             slot_mapping=branch_slot_mapping,
                             seqlen_k=sequence_position + q_len,
-                            backend=_Backend.FLASH_ATTN,
+                            backend=_Backend.FLASH_ATTN_VLLM_V1,
                         ).view(batch_size, -1, num_heads, dim_per_head)
 
                         # Compare the outputs.

@@ -77,9 +77,7 @@ async def test_invalid_json_schema(client: openai.AsyncOpenAI,
                 "role": "user",
                 "content": prompt,
             }],
-            extra_body={"structured_outputs": {
-                "json": invalid_json_schema
-            }},
+            extra_body={"guided_json": invalid_json_schema},
         )
 
 
@@ -101,9 +99,7 @@ async def test_invalid_regex(client: openai.AsyncOpenAI, model_name: str):
                 "content": prompt,
             }],
             extra_body={
-                "structured_outputs": {
-                    "regex": r"[.*"
-                },
+                "guided_regex": r"[.*",
                 "stop": ["\n"]
             },
         )
@@ -138,9 +134,5 @@ async def test_invalid_grammar(client: openai.AsyncOpenAI, model_name: str):
                 "role": "user",
                 "content": prompt,
             }],
-            extra_body={
-                "structured_outputs": {
-                    "grammar": invalid_simplified_sql_grammar
-                }
-            },
+            extra_body={"guided_grammar": invalid_simplified_sql_grammar},
         )

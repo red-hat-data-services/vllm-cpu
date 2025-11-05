@@ -11,8 +11,7 @@ import torch
 
 from vllm.multimodal.inputs import (MultiModalBatchedField,
                                     MultiModalFieldElem, MultiModalFlatField,
-                                    MultiModalKwargsItem,
-                                    MultiModalKwargsItems,
+                                    MultiModalKwargs, MultiModalKwargsItem,
                                     MultiModalSharedField, NestedTensors)
 from vllm.v1.serial_utils import MsgpackDecoder, MsgpackEncoder
 
@@ -97,7 +96,7 @@ def test_encode_decode(monkeypatch: pytest.MonkeyPatch):
 
 
 class MyRequest(msgspec.Struct):
-    mm: Optional[list[MultiModalKwargsItems]]
+    mm: Optional[list[MultiModalKwargs]]
 
 
 def test_multimodal_kwargs():
@@ -120,7 +119,7 @@ def test_multimodal_kwargs():
     audio = MultiModalKwargsItem.from_elems([e1])
     video = MultiModalKwargsItem.from_elems([e2])
     image = MultiModalKwargsItem.from_elems([e3, e4])
-    mm = MultiModalKwargsItems.from_seq([audio, video, image])
+    mm = MultiModalKwargs([audio, video, image])
 
     # pack mm kwargs into a mock request so that it can be decoded properly
     req = MyRequest([mm])
@@ -134,22 +133,19 @@ def test_multimodal_kwargs():
 
     total_len = sum(memoryview(x).cast("B").nbytes for x in encoded)
 
-    # expected total encoding length, should be 14306, +-20 for minor changes
-    assert 14275 <= total_len <= 14325
-    decoded = decoder.decode(encoded).mm[0]
-    assert isinstance(decoded, MultiModalKwargsItems)
+    # expected total encoding length, should be 14255, +-20 for minor changes
+    assert 14250 <= total_len <= 14300
+    decoded: MultiModalKwargs = decoder.decode(encoded).mm[0]
 
     # check all modalities were recovered and do some basic sanity checks
-    assert len(decoded) == 3
-    images = decoded["image"]
+    assert len(decoded.modalities) == 3
+    images = decoded.get_items("image")
     assert len(images) == 1
     assert len(images[0].items()) == 2
     assert list(images[0].keys()) == ["i0", "i1"]
 
     # check the tensor contents and layout in the main dict
-    mm_data = mm.get_data()
-    decoded_data = decoded.get_data()
-    assert all(nested_equal(mm_data[k], decoded_data[k]) for k in mm_data)
+    assert all(nested_equal(mm[k], decoded[k]) for k in mm)
 
 
 def nested_equal(a: NestedTensors, b: NestedTensors):

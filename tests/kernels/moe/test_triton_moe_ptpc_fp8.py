@@ -7,12 +7,10 @@ import itertools
 import pytest
 import torch
 
-from tests.kernels.moe.utils import fused_moe
 from vllm import _custom_ops as ops
 from vllm.config import VllmConfig, set_current_vllm_config
 from vllm.model_executor.layers.activation import SiluAndMul
-from vllm.model_executor.layers.fused_moe.config import (
-    fp8_w8a8_moe_quant_config)
+from vllm.model_executor.layers.fused_moe import fused_moe
 from vllm.platforms import current_platform
 
 if current_platform.get_device_capability() < (9, 0):
@@ -154,12 +152,11 @@ def test_w8a8_fp8_fused_moe(M, N, K, E, topk, dtype, seed):
             score,
             topk,
             renormalize=False,
-            quant_config=fp8_w8a8_moe_quant_config(
-                per_act_token_quant=True,
-                w1_scale=w1_s,
-                w2_scale=w2_s,
-                block_shape=None,  # Not using block quantization
-            ),
+            use_fp8_w8a8=True,  # using fp8
+            per_channel_quant=True,
+            w1_scale=w1_s,
+            w2_scale=w2_s,
+            block_shape=None,  # Not using block quantization
         )
 
     # Check results

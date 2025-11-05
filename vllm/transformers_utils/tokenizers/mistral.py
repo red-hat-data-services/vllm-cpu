@@ -204,16 +204,18 @@ class MistralTokenizer(TokenizerBase):
         self.version: int = int(_mistral_version_str.split("v")[-1])
 
         tokenizer_ = tokenizer.instruct_tokenizer.tokenizer
-        from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
-        from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-
+        from mistral_common.tokens.tokenizers.tekken import (
+            SpecialTokenPolicy, Tekkenizer)
         self.is_tekken = isinstance(tokenizer_, Tekkenizer)
         from mistral_common.tokens.tokenizers.sentencepiece import (
             SentencePieceTokenizer)
         self.is_spm = isinstance(tokenizer_, SentencePieceTokenizer)
-        self._special_token_policy = (SpecialTokenPolicy.IGNORE
-                                      if self.is_tekken else None)
-        if not (self.is_tekken or self.is_spm):
+        if self.is_tekken:
+            # Make sure special tokens will not raise
+            tokenizer_.special_token_policy = SpecialTokenPolicy.IGNORE
+        elif self.is_spm:
+            pass
+        else:
             raise TypeError(f"Unsupported tokenizer: {type(tokenizer_)}")
 
         self._vocab = tokenizer_.vocab()
@@ -274,7 +276,7 @@ class MistralTokenizer(TokenizerBase):
         return tokenizer_file
 
     # the following attributes are set to fit vLLM's design and are used
-    # by the structured output backends.
+    # by the guided structured output backends.
     @property
     def all_special_tokens_extended(self) -> list[str]:
         from mistral_common.tokens.tokenizers.base import SpecialTokens
@@ -326,10 +328,6 @@ class MistralTokenizer(TokenizerBase):
     @property
     def max_token_id(self) -> int:
         return self._max_token_id
-
-    @property
-    def truncation_side(self) -> str:
-        raise NotImplementedError()
 
     def __len__(self) -> int:
         return self.vocab_size
@@ -432,8 +430,7 @@ class MistralTokenizer(TokenizerBase):
                         return self.tokenizer.unk_id
 
                 ids = [_token_to_id(t) for t in tokens]
-                decoded = self.tokenizer.decode(ids,
-                                                self._special_token_policy)
+                decoded = self.tokenizer.decode(ids)
             else:
                 decoded = "".join(tokens)
         else:
@@ -447,8 +444,7 @@ class MistralTokenizer(TokenizerBase):
                 if token in special_tokens:
                     if regular_tokens:
                         decoded_list.append(
-                            self.tokenizer.decode(regular_tokens,
-                                                  self._special_token_policy))
+                            self.tokenizer.decode(regular_tokens))
                         regular_tokens = []
                     decoded_list.append(token)
                 else:
@@ -456,13 +452,15 @@ class MistralTokenizer(TokenizerBase):
 
             if regular_tokens:
                 decoded_list.append(
-                    self.tokenizer.decode(regular_tokens,
-                                          self._special_token_policy))
+                    self.tokenizer.decode(regular_tokens))  # type: ignore
 
             decoded = ''.join(decoded_list)
 
         return decoded
 
+    # WARN: Outlines logits processors can overwrite this method.
+    # See: guided_decoding/outlines_logits_processors.py::_adapt_tokenizer
+    # for more.
     def decode(self,
                ids: Union[list[int], int],
                skip_special_tokens: bool = True) -> str:
@@ -472,7 +470,7 @@ class MistralTokenizer(TokenizerBase):
 
         if isinstance(ids, int):
             ids = [ids]
-        return self.tokenizer.decode(ids, self._special_token_policy)
+        return self.tokenizer.decode(ids)
 
     def convert_ids_to_tokens(
         self,
@@ -513,9 +511,6 @@ class MistralTokenizer(TokenizerBase):
             # See: https://github.com/vllm-project/vllm/pull/8640
             #      https://github.com/vllm-project/vllm/pull/9625
             # if underlying tokenizeir is sentencepiece, we just add "�"
-            tokens = [
-                self.tokenizer.id_to_byte_piece(id, self._special_token_policy)
-                for id in ids
-            ]
+            tokens = [self.tokenizer.id_to_byte_piece(id) for id in ids]
 
         return tokens

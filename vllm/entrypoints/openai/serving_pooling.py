@@ -13,26 +13,19 @@ import torch
 from fastapi import Request
 from typing_extensions import assert_never
 
-from vllm.config import VllmConfig
+from vllm.config import ModelConfig
 from vllm.engine.protocol import EngineClient
 from vllm.entrypoints.chat_utils import ChatTemplateContentFormatOption
 from vllm.entrypoints.logger import RequestLogger
-# yapf: disable
 from vllm.entrypoints.openai.protocol import (ErrorResponse,
-                                              IOProcessorRequest,
-                                              IOProcessorResponse,
                                               PoolingChatRequest,
-                                              PoolingCompletionRequest,
                                               PoolingRequest, PoolingResponse,
                                               PoolingResponseData, UsageInfo)
-# yapf: enable
 from vllm.entrypoints.openai.serving_engine import OpenAIServing
 from vllm.entrypoints.openai.serving_models import OpenAIServingModels
-from vllm.entrypoints.renderer import RenderConfig
 from vllm.entrypoints.utils import _validate_truncation_size
 from vllm.logger import init_logger
 from vllm.outputs import PoolingOutput, PoolingRequestOutput
-from vllm.plugins.io_processors import get_io_processor
 from vllm.utils import merge_async_iterators
 
 logger = init_logger(__name__)
@@ -59,30 +52,26 @@ class OpenAIServingPooling(OpenAIServing):
     def __init__(
         self,
         engine_client: EngineClient,
-        vllm_config: VllmConfig,
+        model_config: ModelConfig,
         models: OpenAIServingModels,
         *,
         request_logger: Optional[RequestLogger],
         chat_template: Optional[str],
         chat_template_content_format: ChatTemplateContentFormatOption,
-        log_error_stack: bool = False,
     ) -> None:
         super().__init__(engine_client=engine_client,
-                         model_config=vllm_config.model_config,
+                         model_config=model_config,
                          models=models,
-                         request_logger=request_logger,
-                         log_error_stack=log_error_stack)
+                         request_logger=request_logger)
 
         self.chat_template = chat_template
         self.chat_template_content_format: Final = chat_template_content_format
-        io_processor_plugin = self.model_config.io_processor_plugin
-        self.io_processor = get_io_processor(vllm_config, io_processor_plugin)
 
     async def create_pooling(
         self,
         request: PoolingRequest,
         raw_request: Optional[Request] = None,
-    ) -> Union[PoolingResponse, IOProcessorResponse, ErrorResponse]:
+    ) -> Union[PoolingResponse, ErrorResponse]:
         """
         See https://platform.openai.com/docs/api-reference/embeddings/create
         for the API specification. This API mimics the OpenAI Embedding API.
@@ -91,47 +80,32 @@ class OpenAIServingPooling(OpenAIServing):
         if error_check_ret is not None:
             return error_check_ret
 
-        model_name = self.models.model_name()
+        encoding_format = request.encoding_format
+        if request.dimensions is not None:
+            return self.create_error_response(
+                "dimensions is currently not supported")
 
+        model_name = self._get_model_name(request.model)
         request_id = f"pool-{self._base_request_id(raw_request)}"
         created_time = int(time.time())
 
-        is_io_processor_request = isinstance(request, IOProcessorRequest)
+        truncate_prompt_tokens = request.truncate_prompt_tokens
+
         try:
+            truncate_prompt_tokens = _validate_truncation_size(
+                self.max_model_len, truncate_prompt_tokens)
             lora_request = self._maybe_get_adapters(request)
 
             if self.model_config.skip_tokenizer_init:
                 tokenizer = None
             else:
-                tokenizer = await self.engine_client.get_tokenizer()
-            renderer = self._get_renderer(tokenizer)
+                tokenizer = await self.engine_client.get_tokenizer(lora_request
+                                                                   )
 
-            if getattr(request, "dimensions", None) is not None:
-                return self.create_error_response(
-                    "dimensions is currently not supported")
-
-            truncate_prompt_tokens = getattr(request, "truncate_prompt_tokens",
-                                             None)
-            truncate_prompt_tokens = _validate_truncation_size(
-                self.max_model_len, truncate_prompt_tokens)
-
-            if is_io_processor_request:
-                if self.io_processor is None:
-                    raise ValueError(
-                        "No IOProcessor plugin installed. Please refer "
-                        "to the documentation and to the "
-                        "'prithvi_geospatial_mae_io_processor' "
-                        "offline inference example for more details.")
-
-                validated_prompt = self.io_processor.parse_request(request)
-
-                engine_prompts = await self.io_processor.pre_process_async(
-                    prompt=validated_prompt, request_id=request_id)
-
-            elif isinstance(request, PoolingChatRequest):
+            if isinstance(request, PoolingChatRequest):
                 (
                     _,
-                    _,
+                    request_prompts,
                     engine_prompts,
                 ) = await self._preprocess_chat(
                     request,
@@ -144,16 +118,18 @@ class OpenAIServingPooling(OpenAIServing):
                     # so there is no need to append extra tokens to the input
                     add_generation_prompt=False,
                     continue_final_message=False,
+                    truncate_prompt_tokens=truncate_prompt_tokens,
                     add_special_tokens=request.add_special_tokens,
                 )
-            elif isinstance(request, PoolingCompletionRequest):
-                engine_prompts = await renderer.render_prompt(
-                    prompt_or_prompts=request.input,
-                    config=self._build_render_config(request),
-                )
             else:
-                raise ValueError(
-                    f"Unsupported request of type {type(request)}")
+                (request_prompts,
+                 engine_prompts) = await self._preprocess_completion(
+                     request,
+                     tokenizer,
+                     request.input,
+                     truncate_prompt_tokens=truncate_prompt_tokens,
+                     add_special_tokens=request.add_special_tokens,
+                 )
         except (ValueError, TypeError, jinja2.TemplateError) as e:
             logger.exception("Error in preprocessing prompt inputs")
             return self.create_error_response(str(e))
@@ -172,7 +148,7 @@ class OpenAIServingPooling(OpenAIServing):
                 request_id_item = f"{request_id}-{i}"
 
                 self._log_inputs(request_id_item,
-                                 engine_prompt,
+                                 request_prompts[i],
                                  params=pooling_params,
                                  lora_request=lora_request)
 
@@ -195,16 +171,6 @@ class OpenAIServingPooling(OpenAIServing):
 
         result_generator = merge_async_iterators(*generators)
 
-        if is_io_processor_request:
-            assert self.io_processor is not None
-            output = await self.io_processor.post_process_async(
-                model_output=result_generator,
-                request_id=request_id,
-            )
-            return self.io_processor.output_to_response(output)
-
-        assert isinstance(request,
-                          (PoolingCompletionRequest, PoolingChatRequest))
         num_prompts = len(engine_prompts)
 
         # Non-streaming response
@@ -224,7 +190,7 @@ class OpenAIServingPooling(OpenAIServing):
                 request_id,
                 created_time,
                 model_name,
-                request.encoding_format,
+                encoding_format,
             )
         except asyncio.CancelledError:
             return self.create_error_response("Client disconnected")
@@ -267,10 +233,3 @@ class OpenAIServingPooling(OpenAIServing):
             data=items,
             usage=usage,
         )
-
-    def _build_render_config(
-            self, request: PoolingCompletionRequest) -> RenderConfig:
-        return RenderConfig(
-            max_length=self.max_model_len,
-            truncate_prompt_tokens=request.truncate_prompt_tokens,
-            add_special_tokens=request.add_special_tokens)

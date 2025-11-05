@@ -6,7 +6,7 @@ It allows you to deploy a large language model (LLM) server with vLLM as the bac
 
 ## Prerequisites
 
-Set up the vLLM and Haystack environment:
+- Setup vLLM and Haystack environment
 
 ```bash
 pip install vllm haystack-ai
@@ -14,13 +14,13 @@ pip install vllm haystack-ai
 
 ## Deploy
 
-1. Start the vLLM server with the supported chat completion model, e.g.
+- Start the vLLM server with the supported chat completion model, e.g.
 
-    ```bash
-    vllm serve mistralai/Mistral-7B-Instruct-v0.1
-    ```
+```bash
+vllm serve mistralai/Mistral-7B-Instruct-v0.1
+```
 
-1. Use the `OpenAIGenerator` and `OpenAIChatGenerator` components in Haystack to query the vLLM server.
+- Use the `OpenAIGenerator` and `OpenAIChatGenerator` components in Haystack to query the vLLM server.
 
 ??? code
 

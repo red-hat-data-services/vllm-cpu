@@ -4,21 +4,18 @@
 import pytest
 import torch
 
+import vllm.envs as envs
 import vllm.plugins
 from vllm.compilation.fusion import (FUSED_OPS, QUANT_OPS, FusedRMSQuantKey,
-                                     RMSNormQuantFusionPass)
+                                     FusionPass, GroupShape, QuantKey)
 from vllm.compilation.noop_elimination import NoOpEliminationPass
-from vllm.compilation.post_cleanup import PostCleanupPass
 from vllm.config import (CompilationConfig, CompilationLevel, PassConfig,
                          VllmConfig)
 from vllm.model_executor.layers.layernorm import RMSNorm
-from vllm.model_executor.layers.quantization.utils.quant_utils import (
-    GroupShape, QuantKey, ScaleDesc)
 from vllm.model_executor.layers.quantization.utils.w8a8_utils import (
-    Fp8LinearOp, cutlass_fp8_supported, maybe_create_device_identity)
+    CUTLASS_FP8_SUPPORTED, Fp8LinearOp, maybe_create_device_identity)
 from vllm.platforms import current_platform
 
-from ..utils import override_cutlass_fp8_supported
 from .backend import TestBackend
 
 FP8_DTYPE = current_platform.fp8_dtype()
@@ -27,14 +24,16 @@ FP8_DTYPE = current_platform.fp8_dtype()
 class TestModel(torch.nn.Module):
 
     def __init__(self, hidden_size: int, eps: float, static: bool,
-                 cuda_force_torch: bool, *args, **kwargs):
+                 cutlass_fp8_enabled: bool, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cuda_force_torch = cuda_force_torch
+        self.cutlass_fp8_enabled = cutlass_fp8_enabled
         self.norm = [RMSNorm(hidden_size, eps) for _ in range(3)]
         self.wscale = [torch.rand(1, dtype=torch.float32) for _ in range(2)]
         group_shape = GroupShape.PER_TENSOR if static else GroupShape.PER_TOKEN
-        quant_scale = ScaleDesc(torch.float32, static, group_shape)
-        self.key = QuantKey(dtype=FP8_DTYPE, scale=quant_scale, symmetric=True)
+        self.key = QuantKey(dtype=FP8_DTYPE,
+                            static=static,
+                            group_shape=group_shape,
+                            symmetric=True)
         if static:
             self.scale = [torch.rand(1, dtype=torch.float32) for _ in range(2)]
         else:
@@ -43,12 +42,11 @@ class TestModel(torch.nn.Module):
             torch.rand(hidden_size, hidden_size).to(dtype=FP8_DTYPE).t()
             for _ in range(2)
         ]
-
-        with override_cutlass_fp8_supported(not cuda_force_torch):
-            self.fp8_linear = Fp8LinearOp(
-                act_quant_static=static,
-                act_quant_group_shape=group_shape,
-            )
+        self.fp8_linear = Fp8LinearOp(
+            cutlass_fp8_supported=cutlass_fp8_enabled,
+            act_quant_static=static,
+            act_quant_group_shape=group_shape,
+        )
 
     def forward(self, x):
         resid = torch.sqrt(x)
@@ -79,18 +77,16 @@ class TestModel(torch.nn.Module):
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
-@pytest.mark.parametrize("hidden_size", [64])
-@pytest.mark.parametrize("num_tokens", [257])
+@pytest.mark.parametrize("hidden_size", [64, 3392, 4096])
+@pytest.mark.parametrize("num_tokens", [7, 256, 533, 2048, 2049])
 @pytest.mark.parametrize("eps", [1e-5, 1e-6])
 @pytest.mark.parametrize("static", [True, False])
-# cuda_force_torch used to test torch code path on platforms that
-# cutlass_fp8_supported() == True.
-@pytest.mark.parametrize("cuda_force_torch",
-                         [True, False] if cutlass_fp8_supported() else [True])
-@pytest.mark.skipif(not current_platform.is_cuda_alike(),
+@pytest.mark.parametrize("cutlass_fp8_enabled",
+                         [True, False] if CUTLASS_FP8_SUPPORTED else [False])
+@pytest.mark.skipif(envs.VLLM_TARGET_DEVICE not in ["cuda", "rocm"],
                     reason="Only test on CUDA and ROCm")
 def test_fusion_rmsnorm_quant(dtype, hidden_size, num_tokens, eps, static,
-                              cuda_force_torch):
+                              cutlass_fp8_enabled):
     torch.set_default_device("cuda")
     torch.set_default_dtype(dtype)
     torch.manual_seed(1)
@@ -104,11 +100,10 @@ def test_fusion_rmsnorm_quant(dtype, hidden_size, num_tokens, eps, static,
     with vllm.config.set_current_vllm_config(vllm_config):
         # Reshape pass is needed for the fusion pass to work
         noop_pass = NoOpEliminationPass(vllm_config)
-        fusion_pass = RMSNormQuantFusionPass(vllm_config)
-        cleanup_pass = PostCleanupPass(vllm_config)
+        fusion_pass = FusionPass.instance(vllm_config)
 
-        backend = TestBackend(noop_pass, fusion_pass, cleanup_pass)
-        model = TestModel(hidden_size, eps, static, cuda_force_torch)
+        backend = TestBackend(noop_pass, fusion_pass)
+        model = TestModel(hidden_size, eps, static, cutlass_fp8_enabled)
 
         # First dimension dynamic
         x = torch.rand(num_tokens, hidden_size)
@@ -128,8 +123,6 @@ def test_fusion_rmsnorm_quant(dtype, hidden_size, num_tokens, eps, static,
             ATOL, RTOL = (1e-2, 1e-2)
 
         torch.testing.assert_close(result, result2, atol=ATOL, rtol=RTOL)
-
-        assert fusion_pass.matched_count == 2
 
         # In pre-nodes, fp8 quant should be there and fused kernels should not
         backend.check_before_ops(model.ops_in_model_before())

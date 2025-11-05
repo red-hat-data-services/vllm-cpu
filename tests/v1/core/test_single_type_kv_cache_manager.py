@@ -6,8 +6,8 @@ import random
 import torch
 
 from vllm.v1.core.block_pool import BlockPool
-from vllm.v1.core.kv_cache_utils import (BlockHash, KVCacheBlock,
-                                         make_block_hash_with_group_id)
+from vllm.v1.core.kv_cache_utils import (BlockHash, BlockHashWithGroupId,
+                                         KVCacheBlock)
 from vllm.v1.core.single_type_kv_cache_manager import (
     ChunkedLocalAttentionManager, SlidingWindowManager)
 from vllm.v1.kv_cache_interface import (ChunkedLocalAttentionSpec,
@@ -35,6 +35,7 @@ def test_chunked_local_attention_possible_cached_prefix():
         head_size=1,
         dtype=torch.float32,
         attention_chunk_size=4,
+        use_mla=False,
     )
 
     block_pool = BlockPool(num_gpu_blocks=100, enable_caching=True)
@@ -43,18 +44,19 @@ def test_chunked_local_attention_possible_cached_prefix():
 
     def run_one_case(block_is_cached, tail_token, expect_length):
         block_hash_list = [
-            BlockHash(str(i).encode()) for i in range(len(block_is_cached))
+            BlockHash(i, ()) for i in range(len(block_is_cached))
         ]
 
-        block_pool.cached_block_hash_to_block._cache.clear()
+        block_pool.cached_block_hash_to_block.clear()
 
         # Mock the block pool with the cached blocks
         for i, (block_hash,
                 is_cached) in enumerate(zip(block_hash_list, block_is_cached)):
             if is_cached:
-                block_pool.cached_block_hash_to_block.insert(
-                    make_block_hash_with_group_id(block_hash, 0),
-                    block_pool.blocks[i + 10])
+                block_pool.cached_block_hash_to_block[BlockHashWithGroupId(
+                    block_hash, 0)] = {
+                        i: block_pool.blocks[i + 10],
+                    }
 
         computed_blocks = manager.find_longest_cache_hit(
             block_hashes=block_hash_list,
@@ -99,6 +101,7 @@ def test_sliding_window_possible_cached_prefix():
         head_size=1,
         dtype=torch.float32,
         sliding_window=4,
+        use_mla=False,
     )
 
     block_pool = BlockPool(num_gpu_blocks=100, enable_caching=True)
@@ -106,18 +109,19 @@ def test_sliding_window_possible_cached_prefix():
 
     def run_one_case(block_is_cached, expect_length):
         block_hash_list = [
-            BlockHash(str(i).encode()) for i in range(len(block_is_cached))
+            BlockHash(i, ()) for i in range(len(block_is_cached))
         ]
 
-        block_pool.cached_block_hash_to_block._cache.clear()
+        block_pool.cached_block_hash_to_block.clear()
 
         # Mock the block pool with the cached blocks
         for i, (block_hash,
                 is_cached) in enumerate(zip(block_hash_list, block_is_cached)):
             if is_cached:
-                block_pool.cached_block_hash_to_block.insert(
-                    make_block_hash_with_group_id(block_hash, 0),
-                    block_pool.blocks[i + 10])
+                block_pool.cached_block_hash_to_block[BlockHashWithGroupId(
+                    block_hash, 0)] = {
+                        i: block_pool.blocks[i + 10],
+                    }
 
         computed_blocks = manager.find_longest_cache_hit(
             block_hashes=block_hash_list,
@@ -163,6 +167,7 @@ def test_chunked_local_attention_remove_skipped_blocks():
         head_size=1,
         dtype=torch.float32,
         attention_chunk_size=4,
+        use_mla=False,
     )
 
     block_pool = BlockPool(num_gpu_blocks=2000, enable_caching=True)
@@ -214,6 +219,7 @@ def test_sliding_window_remove_skipped_blocks():
         head_size=1,
         dtype=torch.float32,
         sliding_window=4,
+        use_mla=False,
     )
 
     block_pool = BlockPool(num_gpu_blocks=2000, enable_caching=True)
@@ -281,6 +287,7 @@ def test_get_num_blocks_to_allocate():
         head_size=1,
         dtype=torch.float32,
         sliding_window=4,  # Placeholder value, not related to test result
+        use_mla=False,
     )
 
     block_pool = BlockPool(num_gpu_blocks=100, enable_caching=True)
@@ -303,6 +310,7 @@ def test_chunked_local_attention_get_num_blocks_to_allocate():
         head_size=1,
         dtype=torch.float32,
         attention_chunk_size=4,  # Placeholder value, not related to test result
+        use_mla=False,
     )
 
     block_pool = BlockPool(num_gpu_blocks=100, enable_caching=True)

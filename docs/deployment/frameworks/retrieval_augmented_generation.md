@@ -11,7 +11,7 @@ Here are the integrations:
 
 ### Prerequisites
 
-Set up the vLLM and langchain environment:
+- Setup vLLM and langchain environment
 
 ```bash
 pip install -U vllm \
@@ -22,33 +22,33 @@ pip install -U vllm \
 
 ### Deploy
 
-1. Start the vLLM server with the supported embedding model, e.g.
+- Start the vLLM server with the supported embedding model, e.g.
 
-    ```bash
-    # Start embedding service (port 8000)
-    vllm serve ssmits/Qwen2-7B-Instruct-embed-base
-    ```
+```bash
+# Start embedding service (port 8000)
+vllm serve ssmits/Qwen2-7B-Instruct-embed-base
+```
 
-1. Start the vLLM server with the supported chat completion model, e.g.
+- Start the vLLM server with the supported chat completion model, e.g.
 
-    ```bash
-    # Start chat service (port 8001)
-    vllm serve qwen/Qwen1.5-0.5B-Chat --port 8001
-    ```
+```bash
+# Start chat service (port 8001)
+vllm serve qwen/Qwen1.5-0.5B-Chat --port 8001
+```
 
-1. Use the script: <gh-file:examples/online_serving/retrieval_augmented_generation_with_langchain.py>
+- Use the script: <gh-file:examples/online_serving/retrieval_augmented_generation_with_langchain.py>
 
-1. Run the script
+- Run the script
 
-    ```python
-    python retrieval_augmented_generation_with_langchain.py
-    ```
+```python
+python retrieval_augmented_generation_with_langchain.py
+```
 
 ## vLLM + llamaindex
 
 ### Prerequisites
 
-Set up the vLLM and llamaindex environment:
+- Setup vLLM and llamaindex environment
 
 ```bash
 pip install vllm \
@@ -60,24 +60,24 @@ pip install vllm \
 
 ### Deploy
 
-1. Start the vLLM server with the supported embedding model, e.g.
+- Start the vLLM server with the supported embedding model, e.g.
 
-    ```bash
-    # Start embedding service (port 8000)
-    vllm serve ssmits/Qwen2-7B-Instruct-embed-base
-    ```
+```bash
+# Start embedding service (port 8000)
+vllm serve ssmits/Qwen2-7B-Instruct-embed-base
+```
 
-1. Start the vLLM server with the supported chat completion model, e.g.
+- Start the vLLM server with the supported chat completion model, e.g.
 
-    ```bash
-    # Start chat service (port 8001)
-    vllm serve qwen/Qwen1.5-0.5B-Chat --port 8001
-    ```
+```bash
+# Start chat service (port 8001)
+vllm serve qwen/Qwen1.5-0.5B-Chat --port 8001
+```
 
-1. Use the script: <gh-file:examples/online_serving/retrieval_augmented_generation_with_llamaindex.py>
+- Use the script: <gh-file:examples/online_serving/retrieval_augmented_generation_with_llamaindex.py>
 
-1. Run the script:
+- Run the script
 
-    ```python
-    python retrieval_augmented_generation_with_llamaindex.py
-    ```
+```python
+python retrieval_augmented_generation_with_llamaindex.py
+```
