@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """Custom input builders for edge-cases in different models."""
+from io import BytesIO
 from typing import Callable
 
-from vllm.assets.image import ImageAsset
+import requests
+from PIL import Image
+
 from vllm.multimodal.image import rescale_image_size
 from vllm.multimodal.video import (rescale_video_size, resize_video,
                                    sample_frames_from_video)
@@ -115,9 +118,9 @@ def different_patch_input_cases_internvl():
 
 
 def windows_attention_image_qwen2_5_vl():
-
-    # image from regression issue: https://github.com/vllm-project/vllm/issues/15122 # noqa: E501
-    image = ImageAsset("hato").pil_image
+    # image from regression issue: https://github.com/vllm-project/vllm/issues/15122
+    image_url = "https://aomediacodec.github.io/av1-avif/testFiles/Link-U/hato.jpg"
+    image = Image.open(BytesIO(requests.get(image_url).content))
 
     question = "Describe the image."
     img_prompt = "<|vision_start|><|image_pad|><|vision_end|>"

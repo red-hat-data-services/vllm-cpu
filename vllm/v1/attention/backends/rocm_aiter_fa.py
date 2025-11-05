@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """Attention layer with AiterFlashAttention."""
 from dataclasses import dataclass
-from typing import Optional
+from typing import ClassVar, Optional
 
 import torch
 
@@ -11,8 +11,7 @@ from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
 from vllm.platforms import current_platform
-from vllm.v1.attention.backends.utils import (AttentionCGSupport,
-                                              AttentionMetadataBuilder,
+from vllm.v1.attention.backends.utils import (AttentionMetadataBuilder,
                                               CommonAttentionMetadata)
 from vllm.v1.kv_cache_interface import AttentionSpec
 
@@ -232,15 +231,15 @@ class AiterFlashAttentionMetadata:
 
 class AiterFlashAttentionMetadataBuilder(
         AttentionMetadataBuilder[AiterFlashAttentionMetadata]):
-    cudagraph_support = AttentionCGSupport.UNIFORM_SINGLE_TOKEN_DECODE
+    full_cudagraph_supported: ClassVar[bool] = True
 
     def __init__(self, kv_cache_spec: AttentionSpec, layer_names: list[str],
                  vllm_config: VllmConfig, device: torch.device):
-        super().__init__(kv_cache_spec, layer_names, vllm_config, device)
-
+        self.vllm_config = vllm_config
         self.model_config = vllm_config.model_config
         self.parallel_config = vllm_config.parallel_config
         self.cache_config = vllm_config.cache_config
+        self.device = device
 
         self.num_heads_q = self.model_config.get_num_attention_heads(
             self.parallel_config)
@@ -248,6 +247,7 @@ class AiterFlashAttentionMetadataBuilder(
             self.parallel_config)
         self.headdim = self.model_config.get_head_size()
         self.block_size = kv_cache_spec.block_size
+        self.kv_cache_spec = kv_cache_spec
         # Sliding window size to be used with the AOT scheduler will be
         # populated on first build() call.
         self.aot_sliding_window: Optional[tuple[int, int]] = None
@@ -269,7 +269,7 @@ class AiterFlashAttentionMetadataBuilder(
 
         num_actual_tokens = common_attn_metadata.num_actual_tokens
         max_query_len = common_attn_metadata.max_query_len
-        max_seq_len = common_attn_metadata.max_seq_len
+        max_seq_len = int(common_attn_metadata.seq_lens_cpu.max())
         query_start_loc = common_attn_metadata.query_start_loc
         seq_lens = common_attn_metadata.seq_lens
         block_table_tensor = common_attn_metadata.block_table_tensor
@@ -340,7 +340,7 @@ class AiterFlashAttentionBackend(AttentionBackend):
 
     @staticmethod
     def get_name() -> str:
-        return "FLASH_ATTN"
+        return "FLASH_ATTN_VLLM_V1"
 
     @staticmethod
     def get_impl_cls() -> type["AiterFlashAttentionImpl"]:
@@ -360,7 +360,6 @@ class AiterFlashAttentionBackend(AttentionBackend):
         block_size: int,
         num_kv_heads: int,
         head_size: int,
-        cache_dtype_str: str = "auto",
     ) -> tuple[int, ...]:
         if block_size % 16 != 0:
             raise ValueError("Block size must be a multiple of 16.")
@@ -421,7 +420,6 @@ class AiterFlashAttentionImpl(AttentionImpl):
         attn_metadata: AiterFlashAttentionMetadata,
         output: Optional[torch.Tensor] = None,
         output_scale: Optional[torch.Tensor] = None,
-        output_block_scale: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Forward pass with AiterFlashAttention.
 
@@ -429,8 +427,7 @@ class AiterFlashAttentionImpl(AttentionImpl):
             query: shape = [num_tokens, num_heads, head_size]
             key: shape = [num_tokens, num_kv_heads, head_size]
             value: shape = [num_tokens, num_kv_heads, head_size]
-            kv_cache: shape =
-                [2, num_blocks, block_size, num_kv_heads, head_size]
+            kv_cache = [2, num_blocks, block_size, num_kv_heads, head_size]
             attn_metadata: Metadata for attention.
         Returns:
             shape = [num_tokens, num_heads * head_size]
@@ -440,7 +437,7 @@ class AiterFlashAttentionImpl(AttentionImpl):
         """
         assert output is not None, "Output tensor must be provided."
 
-        if output_scale is not None or output_block_scale is not None:
+        if output_scale is not None:
             raise NotImplementedError(
                 "fused output quantization is not yet supported"
                 " for FlashAttentionImpl")
@@ -480,8 +477,8 @@ class AiterFlashAttentionImpl(AttentionImpl):
             )
 
         if self.kv_cache_dtype.startswith("fp8"):
-            key_cache = key_cache.view(current_platform.fp8_dtype())
-            value_cache = value_cache.view(current_platform.fp8_dtype())
+            key_cache = key_cache.view(torch.float8_e4m3fnuz)
+            value_cache = value_cache.view(torch.float8_e4m3fnuz)
 
         if not attn_metadata.use_cascade:
             cu_seqlens_q = attn_metadata.query_start_loc

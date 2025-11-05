@@ -15,7 +15,6 @@ NUM_WARPS = 4 if current_platform.is_rocm() else 8
 
 # To check compatibility
 IS_TURING = current_platform.get_device_capability() == (7, 5)
-float8_info = torch.finfo(current_platform.fp8_dtype())
 
 
 # Here's an example autotuner config for this kernel. This config does provide
@@ -44,7 +43,6 @@ def _fwd_kernel(Q,
                 sm_scale,
                 k_scale,
                 v_scale,
-                out_scale_inv,
                 B_Start_Loc,
                 B_Seqlen,
                 x: tl.constexpr,
@@ -84,11 +82,8 @@ def _fwd_kernel(Q,
                 num_unroll_request: tl.constexpr,
                 SKIP_DECODE: tl.constexpr,
                 USE_SINKS: tl.constexpr,
-                USE_FP8: tl.constexpr,
                 MAX_Q_LEN: tl.constexpr = 0,
-                MAX_CTX_LEN: tl.constexpr = 0,
-                FP8_MIN: tl.constexpr = float8_info.min,
-                FP8_MAX: tl.constexpr = float8_info.max):
+                MAX_CTX_LEN: tl.constexpr = 0):
 
     cur_batch = tl.program_id(0)
     cur_head = tl.program_id(1)
@@ -151,7 +146,7 @@ def _fwd_kernel(Q,
         start_n = tl.multiple_of(start_n, BLOCK_SIZE)
         # -- compute qk ----
         bn = tl.load(B_Loc + cur_batch * stride_b_loc_b +
-                     (start_n // BLOCK_SIZE) * stride_b_loc_s).to(tl.int64)
+                     (start_n // BLOCK_SIZE) * stride_b_loc_s)
         # [D,BLOCK_SIZE]
         off_k = (
             bn[None, :] * stride_k_cache_bs + cur_kv_head * stride_k_cache_h +
@@ -289,9 +284,6 @@ def _fwd_kernel(Q,
     off_o = ((cur_batch_in_all_start_index + offs_m[:, None]) * stride_obs +
              cur_head * stride_oh + offs_d[None, :] * stride_od)
     out_ptrs = Out + off_o
-    if USE_FP8:
-        acc = acc * tl.load(out_scale_inv)
-        acc = tl.clamp(acc, FP8_MIN, FP8_MAX)
     tl.store(out_ptrs,
              acc,
              mask=dim_mask[None, :] & (offs_m[:, None] < cur_batch_query_len))
@@ -375,7 +367,7 @@ def _fwd_kernel_flash_attn_v2(
         bn = tl.load(B_Loc + cur_batch * stride_b_loc_b +
                      ((start_n + offs_n) // block_size) * stride_b_loc_s,
                      mask=(start_n + offs_n) < cur_batch_ctx_len,
-                     other=0).to(tl.int64)
+                     other=0)
         off_k = (
             bn[None, :] * stride_k_cache_bs + cur_kv_head * stride_k_cache_h +
             (offs_d[:, None] // x) * stride_k_cache_d +
@@ -583,7 +575,7 @@ def _fwd_kernel_alibi(
         bn = tl.load(B_Loc + cur_batch * stride_b_loc_b +
                      ((start_n + offs_n) // block_size) * stride_b_loc_s,
                      mask=(start_n + offs_n) < cur_batch_ctx_len,
-                     other=0).to(tl.int64)
+                     other=0)
         off_k = (
             bn[None, :] * stride_k_cache_bs + cur_kv_head * stride_k_cache_h +
             (offs_d[:, None] // x) * stride_k_cache_d +
@@ -751,7 +743,6 @@ def context_attention_fwd(q,
                           sliding_window=None,
                           sm_scale=None,
                           skip_decode=False,
-                          fp8_out_scale=None,
                           sinks=None):
 
     q_dtype_is_f32 = q.dtype is torch.float32
@@ -802,7 +793,6 @@ def context_attention_fwd(q,
 
     if alibi_slopes is not None:
         assert sinks is None, "Sinks arg is not supported with alibi"
-        assert fp8_out_scale is None, "FP8 output not supported with alibi"
         # need to reduce num. blocks when using fp32
         # due to increased use of GPU shared memory
         # if q.dtype is torch.float32:
@@ -880,7 +870,6 @@ def context_attention_fwd(q,
         sm_scale,
         k_scale,
         v_scale,
-        1.0 / fp8_out_scale if fp8_out_scale is not None else 1.0,
         b_start_loc,
         b_seq_len,
         k_cache.shape[4],
@@ -916,7 +905,6 @@ def context_attention_fwd(q,
         BLOCK_DMODEL_PADDED=Lk_padded,
         SLIDING_WINDOW=sliding_window,
         SKIP_DECODE=skip_decode,
-        USE_FP8=fp8_out_scale is not None,
         BLOCK_M=128,
         BLOCK_N=64,
         num_unroll_cache=4,

@@ -10,7 +10,7 @@ like uniform random routing.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Optional
 
 import torch
 
@@ -50,9 +50,7 @@ class DistributionBasedRouting(RoutingStrategy):
     distributions for testing different routing patterns.
     """
 
-    def __init__(self,
-                 distribution: str = "uniform",
-                 **distribution_params: Any):
+    def __init__(self, distribution: str = "uniform", **distribution_params):
         """
         Initialize distribution-based routing.
 
@@ -246,7 +244,7 @@ class RoutingSimulator:
         cls._routing_strategies[name] = strategy
 
     @classmethod
-    def get_available_strategies(cls) -> list[str]:
+    def get_available_strategies(cls):
         """
         Get list of available routing strategy names.
 

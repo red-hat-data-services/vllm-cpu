@@ -11,19 +11,17 @@ import pytest
 import torch
 
 import vllm.model_executor.layers.fused_moe.modular_kernel as mk
-from vllm.config import VllmConfig, set_current_vllm_config
-from vllm.platforms import current_platform
+from vllm.config import VllmConfig, current_platform, set_current_vllm_config
+from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
 from vllm.utils import has_deep_ep, has_deep_gemm, has_pplx
 from vllm.utils.flashinfer import has_flashinfer_cutlass_fused_moe
 
-from ...utils import multi_gpu_test
 from .modular_kernel_tools.common import (Config, RankTensors, WeightTensors,
                                           reference_moe_impl,
                                           run_modular_kernel)
 from .modular_kernel_tools.mk_objects import (
     MK_FUSED_EXPERT_TYPES, MK_MULTI_GPU_PREPARE_FINALIZE_TYPES,
-    MK_QUANT_CONFIGS, MK_SINGLE_GPU_PREPARE_FINALIZE_TYPES, TestMoEQuantConfig,
-    expert_info)
+    MK_QUANT_CONFIGS, MK_SINGLE_GPU_PREPARE_FINALIZE_TYPES, expert_info)
 from .modular_kernel_tools.parallel_utils import (ProcessGroupInfo,
                                                   parallel_launch_with_config)
 
@@ -56,7 +54,7 @@ def rank_worker(
     pgi: ProcessGroupInfo,
     vllm_config: VllmConfig,
     cpu_group,
-    base_config: Config,
+    config: Config,
     weights: WeightTensors,
     verbose: bool,
 ):
@@ -64,44 +62,42 @@ def rank_worker(
 
     # sanity check
     from vllm import envs
-    if base_config.fused_moe_chunk_size is not None:
-        assert (
-            base_config.fused_moe_chunk_size == envs.VLLM_FUSED_MOE_CHUNK_SIZE)
+    if config.fused_moe_chunk_size is not None:
+        assert (config.fused_moe_chunk_size == envs.VLLM_FUSED_MOE_CHUNK_SIZE)
 
     # get weights to this device
     weights.to_current_device()
 
-    Ms = base_config.Ms
+    Ms = config.Ms
     assert isinstance(Ms, list)
-    TOPKs = base_config.topks
+    TOPKs = config.topks
     assert isinstance(TOPKs, list)
 
     exceptions = []
     count = 0
 
     for m, topk in product(Ms, TOPKs):
-        # override m and topk
-        config = copy.deepcopy(base_config)
-        config.Ms = m
-        config.topks = topk
-
         try:
             print(f"Running[{pgi.rank}]: m={m}, topk={topk} ...")
             count = count + 1
+            # override m and topk
+            cfgx = copy.deepcopy(config)
+            cfgx.Ms = m
+            cfgx.topks = topk
 
             # inputs for rank
-            rank_tensors = RankTensors.make(config, pgi)
+            rank_tensors = RankTensors.make(cfgx, pgi)
 
             # modular kernel out
-            mk_out = run_modular_kernel(pgi, vllm_config, config, weights,
+            mk_out = run_modular_kernel(pgi, vllm_config, cfgx, weights,
                                         rank_tensors)
 
             with set_current_vllm_config(vllm_config):
-                ref_out = reference_moe_impl(config, weights, rank_tensors)
+                ref_out = reference_moe_impl(cfgx, weights, rank_tensors)
 
             if config.quant_dtype == "nvfp4":
-                atol = 1e-1 if config.K < 4096 else 2e-1
-                rtol = 1e-1 if config.K < 4096 else 2e-1
+                atol = 1e-1
+                rtol = 1e-1
             else:
                 atol = 3e-2
                 rtol = 3e-2
@@ -135,7 +131,7 @@ Ms = [32, 64]
 # hidden sizes, making this too large will cause fp4 tests to fail.
 # Also needs to be a multiple of 1024 for deep_gemm.
 Ks = [2048]
-Ns = [1024]
+Ns = [2048]
 TOPKs = [4, 1]
 Es = [32]
 DTYPEs = [torch.bfloat16]
@@ -166,11 +162,10 @@ def is_nyi_config(config: Config) -> bool:
     product(MK_MULTI_GPU_PREPARE_FINALIZE_TYPES, MK_FUSED_EXPERT_TYPES))
 @pytest.mark.parametrize("fused_moe_chunk_size", FUSED_MOE_CHUNK_SIZEs)
 @pytest.mark.parametrize("world_size", [2])
-@multi_gpu_test(num_gpus=2)
 @meets_multi_gpu_requirements
 def test_modular_kernel_combinations_multigpu(
         k: int, n: int, e: int, dtype: torch.dtype,
-        quant_config: Optional[TestMoEQuantConfig],
+        quant_config: Optional[FusedMoEQuantConfig],
         combination: tuple[mk.FusedMoEPrepareAndFinalize,
                            mk.FusedMoEPermuteExpertsUnpermute],
         fused_moe_chunk_size: Optional[int], world_size: int, pytestconfig):
@@ -211,7 +206,7 @@ def test_modular_kernel_combinations_multigpu(
 @pytest.mark.parametrize("world_size", [1])
 def test_modular_kernel_combinations_singlegpu(
         k: int, n: int, e: int, dtype: torch.dtype,
-        quant_config: Optional[TestMoEQuantConfig],
+        quant_config: Optional[FusedMoEQuantConfig],
         combination: tuple[mk.FusedMoEPrepareAndFinalize,
                            mk.FusedMoEPermuteExpertsUnpermute],
         fused_moe_chunk_size: Optional[int], world_size: int, pytestconfig):

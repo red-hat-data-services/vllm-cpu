@@ -51,7 +51,9 @@ if current_platform.is_rocm():
     direct_register_custom_op(
         op_name="rocm_aiter_gemm_w8a8",
         op_func=rocm_aiter_gemm_w8a8_impl,
+        mutates_args=[],
         fake_impl=rocm_aiter_gemm_w8a8_fake,
+        dispatch_key=current_platform.dispatch_key,
     )
 
 

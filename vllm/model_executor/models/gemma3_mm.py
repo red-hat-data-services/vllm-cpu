@@ -14,19 +14,19 @@ from vllm.config import VllmConfig
 from vllm.logger import init_logger
 from vllm.model_executor.layers.layernorm import GemmaRMSNorm
 from vllm.model_executor.models.module_mapping import MultiModelKeys
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
-                                    MultiModalKwargsItems)
+                                    MultiModalKwargs)
 from vllm.multimodal.parse import (ImageProcessorItems, ImageSize,
                                    MultiModalDataItems)
 # yapf: disable
 from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo,
-                                        MultiModalPromptUpdates,
-                                        MultiModalPromptUpdatesApplyResult,
+                                        BaseProcessingInfo, BoundPromptUpdate,
                                         PlaceholderFeaturesInfo,
-                                        PromptReplacement, PromptUpdate,
-                                        PromptUpdateDetails,
+                                        PromptReplacement, PromptTargetMatch,
+                                        PromptUpdate, PromptUpdateDetails,
+                                        find_mm_placeholders,
                                         replace_token_matches)
 # yapf: enable
 from vllm.multimodal.profiling import BaseDummyInputsBuilder
@@ -311,7 +311,7 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
         self,
         mm_items: MultiModalDataItems,
         hf_processor_mm_kwargs: Mapping[str, Any],
-        out_mm_kwargs: MultiModalKwargsItems,
+        out_mm_kwargs: MultiModalKwargs,
     ) -> Sequence[PromptUpdate]:
         hf_processor = self.info.get_hf_processor(**hf_processor_mm_kwargs)
         image_token = hf_processor.boi_token
@@ -337,10 +337,14 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
     def _apply_token_matches(
         self,
         prompt: list[int],
-        mm_prompt_updates: MultiModalPromptUpdates,
-    ) -> tuple[list[int], MultiModalPromptUpdatesApplyResult]:
-        token_ids, res = super()._apply_token_matches(prompt,
-                                                      mm_prompt_updates)
+        mm_matches: Mapping[str, Sequence[PromptTargetMatch]],
+        mm_item_counts: Mapping[str, int],
+    ) -> list[int]:
+        token_ids = super()._apply_token_matches(
+            prompt,
+            mm_matches,
+            mm_item_counts,
+        )
 
         # "\n\n\n" and "\n\n\n\n" are single tokens
         # Since our replacement can insert "\n\n" next to "\n"
@@ -369,12 +373,13 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
             [newline_4],
         )
 
-        return token_ids, res
+        return token_ids
 
     def _find_mm_placeholders(
         self,
+        mm_prompt_updates: Mapping[str, Sequence[BoundPromptUpdate]],
         new_token_ids: list[int],
-        mm_prompt_updates: MultiModalPromptUpdates,
+        mm_item_counts: Mapping[str, int],
     ) -> Mapping[str, list[PlaceholderFeaturesInfo]]:
         # We need to detect "\n\n" inside "\n\n\n" and "\n\n\n\n"
         tokenizer = self.info.get_tokenizer()
@@ -399,8 +404,8 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
             repl_token_ids.extend(repl_toks)
             repl_orig_idxs.extend(orig_idx for _ in range(len(repl_toks)))
 
-        repls = super()._find_mm_placeholders(repl_token_ids,
-                                              mm_prompt_updates)
+        repls = find_mm_placeholders(mm_prompt_updates, repl_token_ids,
+                                     mm_item_counts)
 
         return {
             modality: [
@@ -511,11 +516,7 @@ class Gemma3ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsPP,
             architectures=["Gemma3ForCausalLM"],
         )
         logit_scale = getattr(config, "logit_scale", 1.0)
-
-        if hasattr(self.language_model, "logits_processor"):
-            # The logits processor can be unset if we're using
-            # automatic conversion to pooling model.
-            self.language_model.logits_processor.scale *= logit_scale
+        self.language_model.logits_processor.scale *= logit_scale
 
         self.make_empty_intermediate_tensors = (
             self.language_model.make_empty_intermediate_tensors)
@@ -687,8 +688,7 @@ class Gemma3ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsPP,
             global_attn_mask = torch.where(img_mask == 2, 0, global_attn_mask)
             global_attn_masks.append(global_attn_mask)
 
-            sliding_window = self.config.text_config.sliding_window
-            if sliding_window is not None:
+            if (sliding_window := self.config.sliding_window) is not None:
                 # Create a local causal mask with sliding window (1024).
                 local_attn_mask = torch.ones_like(global_attn_mask)
                 local_attn_mask = torch.tril(local_attn_mask,
@@ -703,8 +703,10 @@ class Gemma3ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsPP,
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
+        sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        return self.language_model.compute_logits(hidden_states)
+        return self.language_model.compute_logits(hidden_states,
+                                                  sampling_metadata)
 
     def load_weights(self, weights: Iterable[tuple[str,
                                                    torch.Tensor]]) -> set[str]:

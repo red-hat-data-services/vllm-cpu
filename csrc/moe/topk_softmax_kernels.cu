@@ -20,7 +20,17 @@
 #include <ATen/cuda/CUDAContext.h>
 #include <c10/cuda/CUDAGuard.h>
 #include "../cuda_compat.h"
-#include "../cub_helpers.h"
+
+#ifndef USE_ROCM
+    #include <cub/util_type.cuh>
+    #include <cub/cub.cuh>
+    #include <cuda/std/functional>
+    using AddOp = cuda::std::plus<float>;
+#else
+    #include <hipcub/util_type.hpp>
+    #include <hipcub/hipcub.hpp>
+    using AddOp = cub::Sum; 
+#endif
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -69,7 +79,7 @@ __launch_bounds__(TPB) __global__
         threadData = max(static_cast<float>(input[idx]), threadData);
     }
 
-    const float maxElem = BlockReduce(tmpStorage).Reduce(threadData, CubMaxOp());
+    const float maxElem = BlockReduce(tmpStorage).Reduce(threadData, cub::Max());
     if (threadIdx.x == 0)
     {
         float_max = maxElem;
@@ -84,7 +94,7 @@ __launch_bounds__(TPB) __global__
         threadData += exp((static_cast<float>(input[idx]) - float_max));
     }
 
-    const auto Z = BlockReduce(tmpStorage).Reduce(threadData, CubAddOp());
+    const auto Z = BlockReduce(tmpStorage).Reduce(threadData, AddOp());
 
     if (threadIdx.x == 0)
     {
@@ -563,7 +573,7 @@ void topk_softmax(
             stream);
     }
     else {
-        TORCH_CHECK(topk_indices.scalar_type() == at::ScalarType::Long);
+        assert(topk_indices.scalar_type() == at::ScalarType::Int64);
         vllm::moe::topkGatingSoftmaxKernelLauncher(
             gating_output.data_ptr<float>(),
             topk_weights.data_ptr<float>(),

@@ -8,12 +8,11 @@ import time
 import aiohttp
 from tqdm.asyncio import tqdm
 
-from .endpoint_request_func import (RequestFunc, RequestFuncInput,
-                                    RequestFuncOutput)
+from .endpoint_request_func import RequestFuncInput, RequestFuncOutput
 
 
 async def wait_for_endpoint(
-    request_func: RequestFunc,
+    request_func,
     test_input: RequestFuncInput,
     session: aiohttp.ClientSession,
     timeout_seconds: int = 600,

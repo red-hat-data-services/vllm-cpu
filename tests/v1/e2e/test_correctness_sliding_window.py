@@ -6,7 +6,8 @@ import pytest
 
 from vllm import LLM, SamplingParams
 
-from ...utils import check_answers, prep_prompts
+from ...core.block.e2e.test_correctness_sliding_window import (check_answers,
+                                                               prep_prompts)
 
 
 @dataclass

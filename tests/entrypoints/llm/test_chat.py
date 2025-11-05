@@ -7,7 +7,7 @@ import pytest
 from vllm import LLM
 from vllm.distributed import cleanup_dist_env_and_memory
 
-from ..openai.test_vision import TEST_IMAGE_ASSETS
+from ..openai.test_vision import TEST_IMAGE_URLS
 
 
 @pytest.fixture(scope="function")
@@ -18,9 +18,10 @@ def text_llm():
               enforce_eager=True,
               seed=0)
 
-    yield weakref.proxy(llm)
+    with llm.deprecate_legacy_api():
+        yield weakref.proxy(llm)
 
-    del llm
+        del llm
 
     cleanup_dist_env_and_memory()
 
@@ -87,16 +88,16 @@ def vision_llm():
         seed=0,
     )
 
-    yield weakref.proxy(llm)
+    with llm.deprecate_legacy_api():
+        yield weakref.proxy(llm)
 
-    del llm
+        del llm
 
     cleanup_dist_env_and_memory()
 
 
 @pytest.mark.parametrize("image_urls",
-                         [[TEST_IMAGE_ASSETS[0], TEST_IMAGE_ASSETS[1]]],
-                         indirect=True)
+                         [[TEST_IMAGE_URLS[0], TEST_IMAGE_URLS[1]]])
 def test_chat_multi_image(vision_llm, image_urls: list[str]):
     messages = [{
         "role":
@@ -157,9 +158,10 @@ def thinking_llm():
         seed=0,
     )
 
-    yield weakref.proxy(llm)
+    with llm.deprecate_legacy_api():
+        yield weakref.proxy(llm)
 
-    del llm
+        del llm
 
     cleanup_dist_env_and_memory()
 

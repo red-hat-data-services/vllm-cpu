@@ -6,8 +6,6 @@ import torch
 
 from vllm.model_executor.layers.fused_moe.batched_deep_gemm_moe import (
     BatchedDeepGemmExperts)
-from vllm.model_executor.layers.fused_moe.config import (
-    fp8_w8a8_moe_quant_config)
 from vllm.model_executor.layers.fused_moe.fused_batched_moe import (
     BatchedPrepareAndFinalize, BatchedTritonExperts)
 from vllm.model_executor.layers.fused_moe.modular_kernel import (
@@ -58,18 +56,13 @@ def test_batched_deepgemm_vs_triton(E: int, T: int, K: int, N: int, topk: int,
         rank=0,
     )
 
-    quant_config = fp8_w8a8_moe_quant_config(
-        w1_scale=w1_s,
-        w2_scale=w2_s,
-        per_act_token_quant=False,
-        block_shape=BLOCK_SIZE,
-    )
-
     # triton (reference)
     triton_experts = BatchedTritonExperts(
         max_num_tokens=max_num_tokens,
         num_dispatchers=1,
-        quant_config=quant_config,
+        use_fp8_w8a8=True,
+        per_act_token_quant=False,
+        block_shape=BLOCK_SIZE,
     )
     mk_triton = FusedMoEModularKernel(prep_finalize, triton_experts)
 
@@ -80,6 +73,8 @@ def test_batched_deepgemm_vs_triton(E: int, T: int, K: int, N: int, topk: int,
         topk_weights=topk_weights,
         topk_ids=topk_ids,
         inplace=False,
+        w1_scale=w1_s,
+        w2_scale=w2_s,
         global_num_experts=E,
     )
 
@@ -87,7 +82,8 @@ def test_batched_deepgemm_vs_triton(E: int, T: int, K: int, N: int, topk: int,
     deepgemm_experts = BatchedDeepGemmExperts(
         max_num_tokens=max_num_tokens,
         num_dispatchers=1,
-        quant_config=quant_config,
+        block_shape=BLOCK_SIZE,
+        per_act_token_quant=False,
     )
     mk_deepgemm = FusedMoEModularKernel(prep_finalize, deepgemm_experts)
 
@@ -98,6 +94,8 @@ def test_batched_deepgemm_vs_triton(E: int, T: int, K: int, N: int, topk: int,
         topk_weights=topk_weights,
         topk_ids=topk_ids,
         inplace=False,
+        w1_scale=w1_s,
+        w2_scale=w2_s,
         global_num_experts=E,
     )
 

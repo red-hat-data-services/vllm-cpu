@@ -31,9 +31,10 @@ from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
 from vllm.model_executor.models.module_mapping import MultiModelKeys
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
-                                    MultiModalKwargsItems)
+                                    MultiModalKwargs)
 from vllm.multimodal.parse import ImageProcessorItems, ImageSize
 # yapf conflicts with isort for this block
 # yapf: disable
@@ -373,7 +374,7 @@ class Idefics3MultiModalProcessor(
         self,
         mm_items: MultiModalDataItems,
         hf_processor_mm_kwargs: Mapping[str, object],
-        out_mm_kwargs: MultiModalKwargsItems,
+        out_mm_kwargs: MultiModalKwargs,
     ) -> Sequence[PromptUpdate]:
         hf_processor = self.info.get_hf_processor(**hf_processor_mm_kwargs)
         image_token, _, _ = self.info._get_image_token(hf_processor)
@@ -605,10 +606,9 @@ class Idefics3ForConditionalGeneration(nn.Module, SupportsMultiModal,
             config.text_config.vocab_size,
             config.text_config.hidden_size,
             quant_config=quant_config,
-            prefix=maybe_prefix(prefix, "lm_head"),
         )
         if self.config.text_config.tie_word_embeddings:
-            self.lm_head.weight = self.model.text_model.embed_tokens.weight
+            self.lm_head.weight = self.model.text_model.wte.weight
         self.logits_processor = LogitsProcessor(config.text_config.vocab_size)
 
     def _parse_and_validate_image_input(
@@ -737,8 +737,10 @@ class Idefics3ForConditionalGeneration(nn.Module, SupportsMultiModal,
 
         return hidden_states
 
-    def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        logits = self.logits_processor(self.lm_head, hidden_states)
+    def compute_logits(self, hidden_states: torch.Tensor,
+                       sampling_metadata: SamplingMetadata) -> torch.Tensor:
+        logits = self.logits_processor(self.lm_head, hidden_states,
+                                       sampling_metadata)
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str,

@@ -19,7 +19,7 @@
 import math
 from collections.abc import Iterable, Mapping
 from itertools import tee
-from typing import Annotated, Literal, Optional, Union
+from typing import Literal, Optional, TypedDict, Union
 
 import torch
 from torch import nn
@@ -32,6 +32,7 @@ from transformers.models.llama4.image_processing_llama4_fast import (
 from vllm.attention.layer import MultiHeadAttention
 from vllm.config import VllmConfig
 from vllm.distributed import get_tensor_model_parallel_world_size
+from vllm.inputs import InputProcessingContext
 from vllm.model_executor.layers.linear import (ColumnParallelLinear,
                                                QKVParallelLinear,
                                                ReplicatedLinear,
@@ -40,55 +41,47 @@ from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.model_loader.utils import initialize_model
 from vllm.model_executor.model_loader.weight_utils import default_weight_loader
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
-                                    MultiModalKwargsItems, NestedTensors)
+                                    MultiModalKwargs, NestedTensors)
 from vllm.multimodal.parse import (ImageProcessorItems, ImageSize,
                                    MultiModalDataItems)
 from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo,
-                                        InputProcessingContext,
-                                        PromptReplacement, PromptUpdate,
-                                        PromptUpdateDetails)
+                                        BaseProcessingInfo, PromptReplacement,
+                                        PromptUpdate, PromptUpdateDetails)
 from vllm.multimodal.profiling import BaseDummyInputsBuilder
+from vllm.multimodal.utils import run_dp_sharded_vision_model
 from vllm.sequence import IntermediateTensors
-from vllm.utils.tensor_schema import TensorSchema, TensorShape
 
 from .interfaces import MultiModalEmbeddings, SupportsMultiModal, SupportsPP
 from .llama4 import Llama4ForCausalLM
 from .utils import (AutoWeightsLoader, flatten_bn, maybe_prefix,
                     merge_multimodal_embeddings)
-from .vision import run_dp_sharded_vision_model
 
 
-class Llama4ImagePatchInputs(TensorSchema):
+class Llama4ImagePatchInputs(TypedDict):
+    type: Literal["pixel_values"]
+    flat_data: torch.Tensor
     """
-    Dimensions:
-        - batch_size: Batch size
-        - total_num_chunks: Batch size * number of chunks
-        - num_channels: Number of channels
-        - image_size: Size of each image
+    Shape:
+    `(batch_size * num_chunks, num_channels, image size, image size)`
     """
-
-    type: Literal["pixel_values"] = "pixel_values"
-
-    flat_data: Annotated[torch.Tensor,
-                         TensorShape("total_num_chunks", "num_channels",
-                                     "image_size", "image_size")]
-
-    patches_per_image: Annotated[torch.Tensor, TensorShape("batch_size")]
+    patches_per_image: torch.Tensor
     """
     The number of total patches for each image in the batch.
-    
+
     This is used to split the embeddings which has the first two dimensions
     flattened just like `flat_data`.
     """
 
-    aspect_ratios: Annotated[torch.Tensor, TensorShape("batch_size", 2)]
+    aspect_ratios: Union[torch.Tensor, list[torch.Tensor]]
     """
     A list of aspect ratios corresponding to the number of tiles
     in each dimension that each image in the batch corresponds to.
-    Each aspect ratio is a pair (ratio_h, ratio_w).
+
+    Shape:
+    `(batch_size, ratio)` where ratio is a pair `(ratio_h, ratio_w)`
     """
 
 
@@ -106,21 +99,22 @@ class Llama4VisionMLP(nn.Module):
         use_data_parallel: bool = False,
     ):
         super().__init__()
-        self.fc1 = ColumnParallelLinear(
+        cls_fc1 = (ReplicatedLinear
+                   if use_data_parallel else ColumnParallelLinear)
+        self.fc1 = cls_fc1(
             input_size=input_size,
             output_size=intermediate_size,
             bias=bias,
             quant_config=quant_config,
             prefix=f"{prefix}.fc1",
-            disable_tp=use_data_parallel,
         )
-        self.fc2 = RowParallelLinear(
+        cls_fc2 = ReplicatedLinear if use_data_parallel else RowParallelLinear
+        self.fc2 = cls_fc2(
             input_size=intermediate_size,
             output_size=output_size,
             bias=bias,
             quant_config=quant_config,
             prefix=f"{prefix}.fc2",
-            disable_tp=use_data_parallel,
         )
         self.activation_fn = nn.GELU()
         self.output_activation = output_activation
@@ -387,10 +381,11 @@ class Llama4VisionEncoder(nn.Module):
     ) -> torch.Tensor:
         r"""
         Args:
-            hidden_states: Input tensor of shape 
-                (batch_size, sequence_length, hidden_size).
-                Hidden states from the model embeddings, representing 
-                the input tokens.
+            inputs_embeds (`torch.FloatTensor` of shape
+                    `(batch_size, sequence_length, hidden_size)`):
+                Optionally, instead of passing `input_ids` you can choose to
+                directly pass an embedded representation. This is useful if you
+                want more control over how to convert `input_ids` indices into
                 associated vectors than the model's internal embedding
                 lookup matrix.
         """
@@ -417,15 +412,20 @@ class Llama4UnfoldConvolution(nn.Module):
             kernel_size = (kernel_size, kernel_size)
         self.unfold = torch.nn.Unfold(kernel_size=kernel_size,
                                       stride=config.patch_size)
-        self.linear = ColumnParallelLinear(
-            input_size=config.num_channels * kernel_size[0] * kernel_size[1],
-            output_size=config.hidden_size,
-            bias=False,
-            gather_output=True,
-            quant_config=quant_config,
-            prefix=f"{prefix}.linear",
-            disable_tp=use_data_parallel,
-        )
+        params = {
+            "input_size":
+            config.num_channels * kernel_size[0] * kernel_size[1],
+            "output_size": config.hidden_size,
+            "bias": False,
+            "quant_config": quant_config,
+            "prefix": f"{prefix}.linear",
+        }
+        if use_data_parallel:
+            cls = ReplicatedLinear
+        else:
+            cls = ColumnParallelLinear
+            params["gather_output"] = True
+        self.linear = cls(**params)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.unfold(hidden_states)
@@ -623,7 +623,7 @@ class Mllama4MultiModalProcessor(BaseMultiModalProcessor[Mllama4ProcessingInfo]
                 for (r_h, r_w) in aspect_ratios
             ]
 
-            processed_outputs["aspect_ratios"] = torch.tensor(aspect_ratios)
+            processed_outputs["aspect_ratios"] = aspect_ratios
             processed_outputs["patches_per_image"] = torch.tensor(
                 patches_per_image)
 
@@ -646,8 +646,13 @@ class Mllama4MultiModalProcessor(BaseMultiModalProcessor[Mllama4ProcessingInfo]
         self,
         mm_items: MultiModalDataItems,
         hf_processor_mm_kwargs: Mapping[str, object],
-        out_mm_kwargs: MultiModalKwargsItems,
+        out_mm_kwargs: MultiModalKwargs,
     ) -> list[PromptUpdate]:
+        assert (
+            mm_items.get_count("image", strict=False) == 0
+            or "aspect_ratios" in out_mm_kwargs
+        ), "Transformers expect to include aspect_ratios in out_mm_kwargs"
+
         config = self.info.get_hf_config()
         vision_config = config.vision_config
 
@@ -657,8 +662,7 @@ class Mllama4MultiModalProcessor(BaseMultiModalProcessor[Mllama4ProcessingInfo]
         img_patch_token = hf_processor.img_patch_token
 
         def get_replacement(item_idx: int):
-            out_item = out_mm_kwargs["image"][item_idx]
-            aspect_ratio = out_item["aspect_ratios"].data
+            aspect_ratio = out_mm_kwargs["aspect_ratios"][item_idx]
 
             repl = hf_processor._prompt_split_image(
                 aspect_ratio=aspect_ratio,
@@ -716,8 +720,6 @@ class Llama4ForConditionalGeneration(nn.Module, SupportsMultiModal,
         "gate_up_proj": ["gate_proj", "up_proj"],
     }
 
-    supports_encoder_tp_data = True
-
     @classmethod
     def get_placeholder_str(cls, modality: str, i: int) -> Optional[str]:
         if modality.startswith("image"):
@@ -730,8 +732,8 @@ class Llama4ForConditionalGeneration(nn.Module, SupportsMultiModal,
         config = vllm_config.model_config.hf_config
         quant_config = vllm_config.quant_config
         multimodal_config = vllm_config.model_config.multimodal_config
-        self.use_data_parallel = multimodal_config.mm_encoder_tp_mode == "data"
-
+        self.use_data_parallel = (vllm_config.parallel_config.
+                                  enable_multimodal_encoder_data_parallel)
         self.config = config
         self.quant_config = quant_config
         self.multimodal_config = multimodal_config
@@ -770,9 +772,11 @@ class Llama4ForConditionalGeneration(nn.Module, SupportsMultiModal,
         # TODO: confirm handling for variable lengths
         flat_pixel_values = flatten_bn(pixel_values, concat=True)
         patches_per_image = flatten_bn(kwargs.pop("patches_per_image"))
-        aspect_ratios = kwargs.pop("aspect_ratios")
-        if aspect_ratios.ndim == 3:
-            aspect_ratios = aspect_ratios.squeeze(1)
+
+        aspect_ratios = kwargs.pop("aspect_ratios", None)
+        if not isinstance(aspect_ratios, (torch.Tensor, list)):
+            raise ValueError("Incorrect type of aspect_ratios. "
+                             f"Got type: {type(aspect_ratios)}")
 
         return Llama4ImagePatchInputs(
             type="pixel_values",
@@ -856,8 +860,10 @@ class Llama4ForConditionalGeneration(nn.Module, SupportsMultiModal,
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
+        sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        return self.language_model.compute_logits(hidden_states)
+        return self.language_model.compute_logits(hidden_states,
+                                                  sampling_metadata)
 
     def separate_weights(
         self,

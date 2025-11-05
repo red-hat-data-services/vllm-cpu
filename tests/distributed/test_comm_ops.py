@@ -18,8 +18,7 @@ from vllm.distributed import (broadcast_tensor_dict, get_pp_group,
                               tensor_model_parallel_all_reduce,
                               tensor_model_parallel_reduce_scatter)
 
-from ..utils import (init_test_distributed_environment, multi_gpu_test,
-                     multi_process_parallel)
+from ..utils import init_test_distributed_environment, multi_process_parallel
 
 
 @ray.remote(num_gpus=1, max_calls=1)
@@ -227,7 +226,8 @@ def send_recv_test_worker(
         torch.testing.assert_close(test_tensor, recv_tensor)
 
 
-@multi_gpu_test(num_gpus=2)
+@pytest.mark.skipif(torch.cuda.device_count() < 2,
+                    reason="Need at least 2 GPUs to run the test.")
 @pytest.mark.parametrize("tp_size", [2])
 @pytest.mark.parametrize("test_target", [
     all_reduce_test_worker, all_gather_test_worker,
@@ -241,7 +241,8 @@ def test_multi_process_tensor_parallel(
     multi_process_parallel(monkeypatch, tp_size, 1, test_target)
 
 
-@multi_gpu_test(num_gpus=2)
+@pytest.mark.skipif(torch.cuda.device_count() < 2,
+                    reason="Need at least 2 GPUs to run the test.")
 @pytest.mark.parametrize("pp_size", [2])
 @pytest.mark.parametrize(
     "test_target", [send_recv_test_worker, send_recv_tensor_dict_test_worker])
@@ -253,7 +254,8 @@ def test_multi_process_pipeline_parallel(
     multi_process_parallel(monkeypatch, 1, pp_size, test_target)
 
 
-@multi_gpu_test(num_gpus=4)
+@pytest.mark.skipif(torch.cuda.device_count() < 4,
+                    reason="Need at least 4 GPUs to run the test.")
 @pytest.mark.parametrize("tp_size", [2])
 @pytest.mark.parametrize("pp_size", [2])
 @pytest.mark.parametrize("test_target", [

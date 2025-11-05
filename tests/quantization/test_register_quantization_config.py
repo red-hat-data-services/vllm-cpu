@@ -105,21 +105,18 @@ def test_register_quantization_config():
                          ])
 def test_custom_quant(vllm_runner, model, monkeypatch):
     """Test infer with the custom quantization method."""
-    # `LLM.apply_model` requires pickling a function.
-    monkeypatch.setenv("VLLM_ALLOW_INSECURE_SERIALIZATION", "1")
-
+    # vllm_runner.apply_model() relies on V0 internals.
+    monkeypatch.setenv("VLLM_USE_V1", "0")
     with vllm_runner(model_name=model,
                      quantization="custom_quant",
                      enforce_eager=True) as llm:
 
-        def check_model(model):
-            layer = model.model.layers[0]
-            qkv_proj = layer.self_attn.qkv_proj
+        model = llm.llm.llm_engine.model_executor.driver_worker.model_runner.model  # noqa: E501
+        layer = model.model.layers[0]
+        qkv_proj = layer.self_attn.qkv_proj
 
-            # Check the quantization method is FakeQuantLinearMethod
-            assert isinstance(qkv_proj.quant_method, FakeQuantLinearMethod)
-
-        llm.apply_model(check_model)
+        # Check the quantization method is FakeQuantLinearMethod
+        assert isinstance(qkv_proj.quant_method, FakeQuantLinearMethod)
 
         output = llm.generate_greedy("Hello my name is", max_tokens=20)
         assert output

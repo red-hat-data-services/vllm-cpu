@@ -12,13 +12,8 @@ class AbstractStaticGraphWrapper(Protocol):
     to be captured as a static graph.
     """
 
-    def __init__(
-        self,
-        runnable: Callable[..., Any],
-        vllm_config: VllmConfig,
-        runtime_mode: CUDAGraphMode,
-        **kwargs: Any,
-    ) -> None:
+    def __init__(self, runnable: Callable, vllm_config: VllmConfig,
+                 runtime_mode: CUDAGraphMode, graph_pool: Any, **kwargs):
         """
         Initializes the StaticGraphWrapper class with graph capturing and
         execution-related configurations.
@@ -30,13 +25,16 @@ class AbstractStaticGraphWrapper(Protocol):
                 graph runtime. See CUDAGraphMode in vllm/config.py.
                 Note that only the subset enum `NONE`, `PIECEWISE` and `FULL`
                 are used as concrete runtime mode for cudagraph dispatching.
+            graph_pool (Any):
+                Graph memory pool handle, e.g.,
+                    `torch.cuda.graph_pool_handle()`.
         Keyword Args:
             kwargs: Additional keyword arguments for platform-specific
                 configurations.
         """
         raise NotImplementedError
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args, **kwargs) -> Any:
         """
         Executes the wrapped callable.
 

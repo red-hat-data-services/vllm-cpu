@@ -106,7 +106,7 @@ class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
     def load_file(self, filepath: Path) -> tuple[npt.NDArray, float]:
         return librosa.load(filepath, sr=None)
 
-    def encode_base64(self, media: tuple[npt.NDArray, int]) -> str:
+    def encode_base64(self, media: tuple[npt.NDArray, float]) -> str:
         audio, sr = media
 
         with BytesIO() as buffer:

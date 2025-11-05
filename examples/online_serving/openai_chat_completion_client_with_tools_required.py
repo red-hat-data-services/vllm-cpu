@@ -6,7 +6,7 @@ without any specific flags:
 
 ```bash
 VLLM_USE_V1=0 vllm serve unsloth/Llama-3.2-1B-Instruct \
-    --structured-outputs-config.backend outlines
+    --guided-decoding-backend outlines
 ```
 
 This example demonstrates how to generate chat completions

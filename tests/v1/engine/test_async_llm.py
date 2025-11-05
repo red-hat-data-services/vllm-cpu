@@ -393,7 +393,7 @@ class MockLoggingStatLogger(LoggingStatLogger):
 async def test_customize_loggers(monkeypatch):
     """Test that we can customize the loggers.
     If a customized logger is provided at the init, it should
-    be added to the default loggers.
+    be used directly.
     """
 
     with monkeypatch.context() as m, ExitStack() as after:
@@ -410,8 +410,7 @@ async def test_customize_loggers(monkeypatch):
 
         stat_loggers = engine.logger_manager.per_engine_logger_dict
         assert len(stat_loggers) == 1
-        assert len(
-            stat_loggers[0]) == 2  # LoggingStatLogger + MockLoggingStatLogger
+        assert len(stat_loggers[0]) == 1
         stat_loggers[0][0].log.assert_called_once()
 
 

@@ -29,6 +29,15 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     rustup default stable && \
     rustup show
 
+## -------------------------
+## Install xsimd headers (header-only library)
+# -------------------------
+#cd ${CURDIR}
+#git clone https://github.com/xtensor-stack/xsimd.git -b 13.0.0
+#cd xsimd
+#mkdir -p /usr/local/include
+#cp -r include/xsimd /usr/local/include/
+
 # -------------------------
 # Apache Arrow (C++ + Python)
 # -------------------------
@@ -223,14 +232,32 @@ fi
 python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
 
 # -------------------------
-# outlines-core
+# aws-lc-sys patch (s390x)
 # -------------------------
 cd ${CURDIR}
-export OUTLINES_CORE_VERSION=0.2.11
+
+export AWS_LC_VERSION=v0.32.0
+git clone --recursive https://github.com/aws/aws-lc-rs.git
+cd aws-lc-rs
+git checkout tags/aws-lc-sys/${AWS_LC_VERSION}
+git submodule sync
+git submodule update --init --recursive
+cd aws-lc-sys
+sed -i '682 s/strncmp(buf, \"-----END \", 9)/memcmp(buf, \"-----END \", 9)/' aws-lc/crypto/pem/pem_lib.c
+sed -i '712 s/strncmp(buf, \"-----END \", 9)/memcmp(buf, \"-----END \", 9)/' aws-lc/crypto/pem/pem_lib.c
+sed -i '747 s/strncmp(buf, \"-----END \", 9)/memcmp(buf, \"-----END \", 9)/' aws-lc/crypto/pem/pem_lib.c
+
+# -------------------------
+# outlines-core (patched to local aws-lc-sys)
+# -------------------------
+cd ${CURDIR}
+export OUTLINES_CORE_VERSION=0.2.10
 git clone https://github.com/dottxt-ai/outlines-core.git
 cd outlines-core
 git checkout tags/${OUTLINES_CORE_VERSION}
 sed -i 's/version = "0.0.0"/version = "'"${OUTLINES_CORE_VERSION}"'"/' Cargo.toml
+echo '[patch.crates-io]' >> Cargo.toml
+echo 'aws-lc-sys = { path = "/root/aws-lc-rs/aws-lc-sys" }' >> Cargo.toml
 uv pip install maturin
 python -m maturin build --release --out "${WHEEL_DIR}"
 

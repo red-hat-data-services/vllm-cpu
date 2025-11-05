@@ -37,7 +37,6 @@ def run_vllm(
     requests: list[SampleRequest],
     n: int,
     engine_args: EngineArgs,
-    do_profile: bool,
     disable_detokenize: bool = False,
 ) -> tuple[float, Optional[list[RequestOutput]]]:
     from vllm import LLM, SamplingParams
@@ -76,14 +75,10 @@ def run_vllm(
     outputs = None
     if not use_beam_search:
         start = time.perf_counter()
-        if do_profile:
-            llm.start_profile()
         outputs = llm.generate(prompts,
                                sampling_params,
                                lora_request=lora_requests,
                                use_tqdm=True)
-        if do_profile:
-            llm.stop_profile()
         end = time.perf_counter()
     else:
         assert lora_requests is None, "BeamSearch API does not support LoRA"
@@ -93,8 +88,6 @@ def run_vllm(
         for request in requests:
             assert request.expected_output_len == output_len
         start = time.perf_counter()
-        if do_profile:
-            llm.start_profile()
         llm.beam_search(
             prompts,
             BeamSearchParams(
@@ -102,8 +95,6 @@ def run_vllm(
                 max_tokens=output_len,
                 ignore_eos=True,
             ))
-        if do_profile:
-            llm.stop_profile()
         end = time.perf_counter()
     return end - start, outputs
 
@@ -112,7 +103,6 @@ def run_vllm_chat(
         requests: list[SampleRequest],
         n: int,
         engine_args: EngineArgs,
-        do_profile: bool,
         disable_detokenize: bool = False) -> tuple[float, list[RequestOutput]]:
     """
     Run vLLM chat benchmark. This function is recommended ONLY for benchmarking
@@ -143,11 +133,7 @@ def run_vllm_chat(
                 detokenize=not disable_detokenize,
             ))
     start = time.perf_counter()
-    if do_profile:
-        llm.start_profile()
     outputs = llm.chat(prompts, sampling_params, use_tqdm=True)
-    if do_profile:
-        llm.stop_profile()
     end = time.perf_counter()
     return end - start, outputs
 
@@ -156,7 +142,6 @@ async def run_vllm_async(
     requests: list[SampleRequest],
     n: int,
     engine_args: AsyncEngineArgs,
-    do_profile: bool,
     disable_frontend_multiprocessing: bool = False,
     disable_detokenize: bool = False,
 ) -> float:
@@ -200,8 +185,6 @@ async def run_vllm_async(
 
         generators = []
         start = time.perf_counter()
-        if do_profile:
-            await llm.start_profile()
         for i, (prompt, sp,
                 lr) in enumerate(zip(prompts, sampling_params, lora_requests)):
             generator = llm.generate(prompt,
@@ -212,8 +195,6 @@ async def run_vllm_async(
         all_gens = merge_async_iterators(*generators)
         async for i, res in all_gens:
             pass
-        if do_profile:
-            await llm.stop_profile()
         end = time.perf_counter()
         return end - start
 
@@ -453,14 +434,6 @@ def validate_args(args):
     if args.backend == "mii" and args.tokenizer != args.model:
         raise ValueError(
             "Tokenizer must be the same as the model for MII backend.")
-    
-    # --data-parallel is not supported currently.
-    # https://github.com/vllm-project/vllm/issues/16222
-    if args.data_parallel_size > 1:
-        raise ValueError(
-            "Data parallel is not supported in offline benchmark, "
-            "please use benchmark serving instead"
-        )
 
 
 def add_cli_args(parser: argparse.ArgumentParser):
@@ -562,12 +535,6 @@ def add_cli_args(parser: argparse.ArgumentParser):
                         type=str,
                         default=None,
                         help="Split of the HF dataset.")
-    parser.add_argument(
-        "--profile",
-        action="store_true",
-        default=False,
-        help="Use Torch Profiler. The env variable "
-        "VLLM_TORCH_PROFILER_DIR must be set to enable profiler.")
 
     # prefix repetition dataset
     prefix_repetition_group = parser.add_argument_group(
@@ -625,27 +592,22 @@ def main(args: argparse.Namespace):
                     requests,
                     args.n,
                     AsyncEngineArgs.from_cli_args(args),
-                    disable_frontend_multiprocessing=args.disable_frontend_multiprocessing,
-                    disable_detokenize=args.disable_detokenize,
-                    do_profile=args.profile,
+                    args.disable_frontend_multiprocessing,
+                    args.disable_detokenize,
                 ))
         else:
             elapsed_time, request_outputs = run_vllm(
                 requests, args.n, EngineArgs.from_cli_args(args),
-                disable_detokenize=args.disable_detokenize,
-                do_profile=args.profile)
+                args.disable_detokenize)
     elif args.backend == "hf":
         assert args.tensor_parallel_size == 1
-        if args.profile:
-            raise NotImplementedError(
-                "Profiling not implemented yet for backend='hf'.")
         elapsed_time = run_hf(requests, args.model, tokenizer, args.n,
                               args.hf_max_batch_size, args.trust_remote_code,
                               args.disable_detokenize)
     elif args.backend == "vllm-chat":
         elapsed_time, request_outputs = run_vllm_chat(
             requests, args.n, EngineArgs.from_cli_args(args),
-            disable_detokenize=args.disable_detokenize, do_profile=args.profile)
+            args.disable_detokenize)
     else:
         raise ValueError(f"Unknown backend: {args.backend}")
 

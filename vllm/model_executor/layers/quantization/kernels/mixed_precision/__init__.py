@@ -10,8 +10,6 @@ from vllm.model_executor.layers.quantization.kernels.mixed_precision.bitblas imp
     BitBLASLinearKernel)
 from vllm.model_executor.layers.quantization.kernels.mixed_precision.conch import (  # noqa: E501
     ConchLinearKernel)
-from vllm.model_executor.layers.quantization.kernels.mixed_precision.cutlass import (  # noqa: E501
-    CutlassW4A8LinearKernel)
 from vllm.model_executor.layers.quantization.kernels.mixed_precision.dynamic_4bit import (  # noqa: E501
     Dynamic4bitLinearKernel)
 from vllm.model_executor.layers.quantization.kernels.mixed_precision.exllama import (  # noqa: E501
@@ -26,7 +24,6 @@ from vllm.platforms import current_platform
 
 # in priority/performance order (when available)
 _POSSIBLE_KERNELS: list[type[MPLinearKernel]] = [
-    CutlassW4A8LinearKernel,
     MacheteLinearKernel,
     AllSparkLinearKernel,
     MarlinLinearKernel,
@@ -46,11 +43,11 @@ def choose_mp_linear_kernel(
      performance.
 
     Args:
-        config (MPLinearLayerConfig): Description of the linear layer to be
-            implemented.
+        config (MPLinearLayerConfig): Description of the linear layer to be 
+          implemented.
         compute_capability (Optional[int], optional): The compute capability of
-            the target device, if None uses `current_platform` to get
-            the compute capability. Defaults to None.
+          the target device, if None uses `current_platform` to get the compute 
+          capability. Defaults to None.
 
     Raises:
         ValueError: If no kernel can implement the given config.

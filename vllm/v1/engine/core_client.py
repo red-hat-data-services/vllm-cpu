@@ -245,8 +245,8 @@ class InprocClient(EngineCoreClient):
         self.engine_core = EngineCore(*args, **kwargs)
 
     def get_output(self) -> EngineCoreOutputs:
-        outputs, _ = self.engine_core.step_fn()
-        return outputs and outputs.get(0) or EngineCoreOutputs()
+        outputs, _ = self.engine_core.step()
+        return outputs.get(0) or EngineCoreOutputs()
 
     def get_supported_tasks(self) -> tuple[SupportedTask, ...]:
         return self.engine_core.get_supported_tasks()
@@ -347,9 +347,8 @@ class BackgroundResources:
 
         if isinstance(self.output_socket, zmq.asyncio.Socket):
             # Async case.
-            loop = self.output_queue_task._loop \
-                if self.output_queue_task else None
-
+            loop = self.output_socket._get_loop()
+            asyncio.get_running_loop()
             sockets = (self.output_socket, self.input_socket,
                        self.first_req_send_socket, self.first_req_rcv_socket,
                        self.stats_update_socket)
@@ -360,12 +359,11 @@ class BackgroundResources:
                 close_sockets(sockets)
                 for task in tasks:
                     if task is not None and not task.done():
-                        with contextlib.suppress(Exception):
-                            task.cancel()
+                        task.cancel()
 
             if in_loop(loop):
                 close_sockets_and_tasks()
-            elif loop and not loop.is_closed():
+            elif not loop.is_closed():
                 loop.call_soon_threadsafe(close_sockets_and_tasks)
             else:
                 # Loop has been closed, try to clean up directly.
@@ -437,7 +435,7 @@ class MPClient(EngineCoreClient):
             self.engines_running = False
 
             self.stats_update_address: Optional[str] = None
-            if client_addresses:
+            if client_addresses is not None:
                 # Engines are managed externally to this client.
                 input_address = client_addresses["input_address"]
                 output_address = client_addresses["output_address"]
@@ -774,7 +772,6 @@ class AsyncMPClient(MPClient):
             client_addresses=client_addresses,
         )
 
-        self.client_count = client_count
         self.client_index = client_index
         self.outputs_queue = asyncio.Queue[Union[EngineCoreOutputs,
                                                  Exception]]()
@@ -1193,6 +1190,21 @@ class DPLBAsyncMPClient(DPAsyncMPClient):
         await self._send_input(EngineCoreRequestType.ABORT, request_ids,
                                engine)
 
+    async def _send_reconfig_message(
+            self, reconfig_request: ReconfigureDistributedRequest,
+            engine: EngineIdentity) -> asyncio.Future:
+        """Send reconfiguration message and return the result future without
+        waiting for completion."""
+        call_id = uuid.uuid1().int >> 64
+        future = asyncio.get_running_loop().create_future()
+        self.utility_results[call_id] = future
+        message = (EngineCoreRequestType.UTILITY.value, *self.encoder.encode(
+            (self.client_index, call_id, "reinitialize_distributed",
+             (reconfig_request, ))))
+        await self._send_input_message(message, engine, reconfig_request)
+        self._ensure_output_queue_task()
+        return future
+
     async def scale_elastic_ep(self, new_data_parallel_size: int) -> None:
         """Scale elastic EP data parallel size"""
         cur_data_parallel_size = len(self.core_engines)
@@ -1202,7 +1214,7 @@ class DPLBAsyncMPClient(DPAsyncMPClient):
             f"different from cur_data_parallel_size {cur_data_parallel_size}")
 
         assert self.vllm_config.parallel_config.data_parallel_backend == \
-            "ray", "Only ray DP backend supports scaling elastic EP"
+            "ray", ("Only ray DP backend supports scaling elastic EP")
 
         scale_up = new_data_parallel_size > cur_data_parallel_size
 
@@ -1234,10 +1246,9 @@ class DPLBAsyncMPClient(DPAsyncMPClient):
                 data_parallel_master_ip,
                 new_data_parallel_master_port=self.vllm_config.parallel_config.
                 data_parallel_master_port)
-            coro = self._call_utility_async("reinitialize_distributed",
-                                            reconfig_request,
-                                            engine=engine)
-            reconfig_futures.append(asyncio.create_task(coro))
+            future = await self._send_reconfig_message(reconfig_request,
+                                                       engine)
+            reconfig_futures.append(future)
 
         logger.info("All reconfigure messages sent, starting engine creation")
 
@@ -1307,10 +1318,9 @@ class DPLBAsyncMPClient(DPAsyncMPClient):
             if cur_dp_rank >= new_data_parallel_size:
                 reconfig_request.new_data_parallel_rank = \
                 ReconfigureRankType.SHUTDOWN_CURRENT_RANK
-            coro = self._call_utility_async("reinitialize_distributed",
-                                            reconfig_request,
-                                            engine=engine)
-            reconfig_futures.append(asyncio.create_task(coro))
+            future = await self._send_reconfig_message(reconfig_request,
+                                                       engine)
+            reconfig_futures.append(future)
 
         for _ in range(new_data_parallel_size, cur_data_parallel_size):
             self.core_engines.pop()

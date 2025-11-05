@@ -20,7 +20,6 @@
 # limitations under the License.
 """Inference-only GPT-2 model compatible with HuggingFace weights."""
 from collections.abc import Iterable
-from itertools import islice
 from typing import Optional, Union
 
 import torch
@@ -41,6 +40,7 @@ from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead, VocabParallelEmbedding)
 from vllm.model_executor.model_loader.weight_utils import default_weight_loader
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from ..layers.pooler import DispatchPooler, Pooler
@@ -228,7 +228,7 @@ class GPT2Model(nn.Module):
             assert intermediate_tensors is not None
             hidden_states = intermediate_tensors["hidden_states"]
 
-        for layer in islice(self.h, self.start_layer, self.end_layer):
+        for layer in self.h[self.start_layer:self.end_layer]:
             hidden_states = layer(hidden_states)
 
         if not get_pp_group().is_last_rank:
@@ -306,8 +306,10 @@ class GPT2LMHeadModel(nn.Module, SupportsPP):
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
+        sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states)
+        logits = self.logits_processor(self.lm_head, hidden_states,
+                                       sampling_metadata)
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str,
@@ -336,10 +338,7 @@ class GPT2ForSequenceClassification(nn.Module):
         config = vllm_config.model_config.hf_config
         self.transformer = GPT2Model(vllm_config=vllm_config,
                                      prefix=maybe_prefix(prefix, "gpt2"))
-        self.score = nn.Linear(config.n_embd,
-                               config.num_labels,
-                               bias=False,
-                               dtype=vllm_config.model_config.head_dtype)
+        self.score = nn.Linear(config.n_embd, config.num_labels, bias=False)
 
         pooler_config = vllm_config.model_config.pooler_config
         assert pooler_config is not None
@@ -348,7 +347,7 @@ class GPT2ForSequenceClassification(nn.Module):
             "encode":
             Pooler.for_encode(pooler_config),
             "classify":
-            Pooler.for_classify(pooler_config, classifier=self.score),
+            Pooler.for_classify(pooler_config, classifier=None),
         })
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]):
@@ -367,7 +366,8 @@ class GPT2ForSequenceClassification(nn.Module):
             position_ids=positions,
             inputs_embeds=inputs_embeds,
             intermediate_tensors=intermediate_tensors)
-        return hidden_states
+        logits = self.score(hidden_states)
+        return logits
 
 
 def _add_transformer_prefix(
