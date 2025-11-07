@@ -137,7 +137,8 @@ RUN umask 002 && \
 ENV TIKTOKEN_CACHE_DIR=${HOME}/.cache/tiktoken
 ENV TIKTOKEN_RS_CACHE_DIR=${TIKTOKEN_CACHE_DIR}
 RUN --mount=type=bind,src=tools/predownload_tiktoken_tokenizers.py,target=predownload_tiktoken_tokenizers.py \
-    python predownload_tiktoken_tokenizers.py
+    python predownload_tiktoken_tokenizers.py && \
+    chmod g+rwx "${TIKTOKEN_CACHE_DIR}"
 
 COPY LICENSE /licenses/vllm.md
 COPY examples/*.jinja /app/data/template/
