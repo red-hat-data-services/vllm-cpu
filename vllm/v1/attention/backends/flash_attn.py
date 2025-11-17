@@ -566,12 +566,14 @@ class FlashAttentionImpl(AttentionImpl):
             logits_soft_cap=self.logits_soft_cap,
             block_table=attn_metadata.block_table,
             common_prefix_len=attn_metadata.common_prefix_len,
+            max_num_splits=attn_metadata.max_num_splits,
             fa_version=self.vllm_flash_attn_version,
             prefix_scheduler_metadata=attn_metadata.prefix_scheduler_metadata,
             suffix_scheduler_metadata=attn_metadata.scheduler_metadata,
             q_descale=layer._q_scale,
             k_descale=layer._k_scale,
             v_descale=layer._v_scale,
+            s_aux=self.sinks,
         )
         return output
 
@@ -719,12 +721,14 @@ def cascade_attention(
     logits_soft_cap: float,
     block_table: torch.Tensor,
     common_prefix_len: int,
+    max_num_splits: int,
     fa_version: int,
     prefix_scheduler_metadata: Optional[torch.Tensor] = None,
     suffix_scheduler_metadata: Optional[torch.Tensor] = None,
     q_descale: Optional[torch.Tensor] = None,
     k_descale: Optional[torch.Tensor] = None,
     v_descale: Optional[torch.Tensor] = None,
+    s_aux: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     assert alibi_slopes is None, ("Cascade attention does not support ALiBi.")
     # TODO: Support sliding window.
@@ -761,6 +765,10 @@ def cascade_attention(
         if k_descale is not None else None,
         v_descale=v_descale.expand(descale_shape)
         if v_descale is not None else None,
+        # s_aux is incorporated into prefix_lse inside the GPU kernel,
+        # enabling its effect during the final attention merge.
+        s_aux=s_aux,
+        num_splits=max_num_splits,
     )
 
     descale_shape = (cu_query_lens.shape[0] - 1, key_cache.shape[-2])
@@ -788,6 +796,7 @@ def cascade_attention(
         if k_descale is not None else None,
         v_descale=v_descale.expand(descale_shape)
         if v_descale is not None else None,
+        num_splits=max_num_splits,
     )
 
     # Merge prefix and suffix outputs, and store the result in output.
