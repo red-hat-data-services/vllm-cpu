@@ -49,6 +49,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         hipblas-devel \
         hipblaslt-devel \
         hipcc \
+        hip-devel \
         hipcub-devel \
         hipfft-devel \
         hiprand-devel \
