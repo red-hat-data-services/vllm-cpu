@@ -59,7 +59,7 @@ target "cuda" {
   args = {
     PYTHON_VERSION = "${PYTHON_VERSION}"
     CUDA_MAJOR =  "12"
-    CUDA_MINOR =  "8"
+    CUDA_MINOR =  "9"
   }
 
   tags = [
