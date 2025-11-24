@@ -1,0 +1,6 @@
+# CODEOWNERS file
+# All files in the repository will be reviewed by 3 random members from the Midstream team
+# Make sure all team members are added to the Midstream team to be included in random selection
+
+* @neuralmagic/Midstream
+
