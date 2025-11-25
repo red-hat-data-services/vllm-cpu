@@ -289,6 +289,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     sed -i -e 's/.*torch.*//g' /src/pyproject.toml /src/requirements/*.txt && \
     uv pip install pandas /hf_wheels/*.whl && \
     make -C /numactl install && \
+    sed -i -e 's/^transformers.*/&, <4.54.0/g' /src/requirements/common.txt && \
     uv pip install -r /src/requirements/common.txt -r /src/requirements/cpu.txt -r /src/requirements/build.txt --no-build-isolation && \
     cd /src/ && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" \
