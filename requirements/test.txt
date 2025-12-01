@@ -855,7 +855,7 @@ rasterio==1.4.3
     #   rioxarray
     #   terratorch
     #   torchgeo
-ray==2.48.0
+ray==2.52.0
     # via -r requirements/test.in
 redis==5.2.0
     # via tensorizer
@@ -964,7 +964,7 @@ sentence-transformers==3.2.1
     #   mteb
 sentencepiece==0.2.0
     # via mistral-common
-setuptools==77.0.3
+setuptools==78.1.1
     # via
     #   lightning-utilities
     #   pytablewriter
