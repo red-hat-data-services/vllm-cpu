@@ -100,6 +100,7 @@ ENV HF_HUB_OFFLINE=1 \
     NUMBA_CACHE_DIR=/tmp/numba \
     TRITON_CACHE_DIR=/tmp/triton \
     VLLM_CACHE_ROOT=/tmp/vllm \
+    FLASHINFER_WORKSPACE_BASE=/tmp \
     # Setup NCCL monitoring with torch
     # For tensor-parallel workloads, this monitors for NCCL deadlocks when
     # one rank dies, and tears down the NCCL process groups so that the driver
