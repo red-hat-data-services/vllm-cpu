@@ -38,8 +38,9 @@ ENV CUDA_MINOR=${CUDA_MINOR}
 ENV CUDA_HOME="/usr/local/cuda-${CUDA_MAJOR}.${CUDA_MINOR}"
 ENV PATH="${CUDA_HOME}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${CUDA_HOME}/lib64/stubs/:${CUDA_HOME}/extras/CUPTI/lib64"
+# cuobjdump, nvcc, and nvrtc and are required by deepgemm for JIT
+# cudart-devel has headers needed for apache-tvm-ffi's optional JIT torch c dlpack extension
 RUN microdnf install -y --nodocs \
-        # cuobjdump, nvcc and nvrtc and cudart-devel are required by deepgemm for JIT
         cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR} \
         cuda-nvcc-${CUDA_MAJOR}-${CUDA_MINOR} \
         cuda-nvrtc-${CUDA_MAJOR}-${CUDA_MINOR} \
@@ -77,8 +78,8 @@ ENV LD_LIBRARY_PATH="${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages/nv
 ENV LD_LIBRARY_PATH="${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvtx/lib:${LD_LIBRARY_PATH}"
 ENV LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:/usr/lib64"
 
-# Triton needs a CC compiler
-RUN microdnf install -y gcc && \
+# Triton needs a CC compiler, triton-kernels install from a git URL
+RUN microdnf install -y gcc git && \
     microdnf clean all
 
 
@@ -98,6 +99,8 @@ ENV HF_HUB_OFFLINE=1 \
     OUTLINES_CACHE_DIR=/tmp/outlines \
     NUMBA_CACHE_DIR=/tmp/numba \
     TRITON_CACHE_DIR=/tmp/triton \
+    VLLM_CACHE_ROOT=/tmp/vllm \
+    FLASHINFER_WORKSPACE_BASE=/tmp \
     # Setup NCCL monitoring with torch
     # For tensor-parallel workloads, this monitors for NCCL deadlocks when
     # one rank dies, and tears down the NCCL process groups so that the driver
