@@ -166,13 +166,30 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,from=torch-vision,source=/tmp/vision/dist,target=/tmp/vision-wheels/ \
     --mount=type=bind,from=hf-xet-builder,source=/tmp/hf-xet/dist,target=/tmp/hf-xet-wheels/ \
     --mount=type=bind,from=torch,source=/tmp/pytorch/dist,target=/tmp/torch-wheels/ \
-     sed -i '/^torch/d' requirements/build.txt && \
-     ARROW_WHL_FILE=$(ls /tmp/arrow-wheels/pyarrow-*.whl | head -n 1) && \
-     VISION_WHL_FILE=$(ls /tmp/vision-wheels/*.whl | head -n 1) && \
-     HF_XET_WHL_FILE=$(ls /tmp/hf-xet-wheels/*.whl | head -n 1) && \
-     TORCH_WHL_FILE=$(ls /tmp/torch-wheels/*.whl | head -n 1) && \
-    uv pip install -v \    
-        $ARROW_WHL_FILE  \
+    \
+    # Remove any tokenizers pin (fix conflict)
+    sed -i '/tokenizers/d' requirements/common.txt && \
+    sed -i '/tokenizers/d' requirements/build.txt && \
+    sed -i '/tokenizers/d' requirements/cpu.txt && \
+    \
+    # Remove PyTorch entries in build.txt
+    sed -i '/^torch/d' requirements/build.txt && \
+    \
+    # Set transformers to a compatible version
+    sed -i 's/^transformers.*/transformers==4.45.2/' requirements/common.txt && \
+    \
+    # Extract wheels
+    ARROW_WHL_FILE=$(ls /tmp/arrow-wheels/pyarrow-*.whl | head -n 1) && \
+    VISION_WHL_FILE=$(ls /tmp/vision-wheels/*.whl | head -n 1) && \
+    HF_XET_WHL_FILE=$(ls /tmp/hf-xet-wheels/*.whl | head -n 1) && \
+    TORCH_WHL_FILE=$(ls /tmp/torch-wheels/*.whl | head -n 1) && \
+    \
+    # Pre-install compatible tokenizers (<0.21)
+    uv pip install -v "tokenizers<0.21" --index-strategy unsafe-best-match && \
+    \
+    # Install remaining deps
+    uv pip install -v \
+        $ARROW_WHL_FILE \
         $VISION_WHL_FILE \
         $HF_XET_WHL_FILE \
         $TORCH_WHL_FILE \
@@ -180,11 +197,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         -r requirements/build.txt \
         -r requirements/cpu.txt 
 
-# Build and install vllm
+# Build and install vLLM
 RUN --mount=type=cache,target=/root/.cache/uv \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" \
     VLLM_TARGET_DEVICE=cpu python setup.py bdist_wheel && \
-    uv pip install "$(echo dist/*.whl)[tensorizer]"
+    uv pip install "$(echo dist/*.whl)[tensorizer]" && \
+    # Dynamically patch BatchFeature import for transformers >=4.45
+    VLLM_DIR=$(uv pip show vllm | grep Location | awk '{print $2}') && \
+    sed -i "s|from transformers.feature_extraction_utils import BatchFeature, PretrainedConfig, ProcessorMixin|from transformers import PretrainedConfig, ProcessorMixin\nfrom transformers.feature_extraction_utils import BatchFeature|" \
+    $VLLM_DIR/vllm/inputs/registry.py
 
 # setup non-root user for vllm
 RUN umask 002 && \
