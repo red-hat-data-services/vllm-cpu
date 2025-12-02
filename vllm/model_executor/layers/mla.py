@@ -109,6 +109,7 @@ class MultiHeadLatentAttentionWrapper(CustomOp):
         self,
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
+        llama_4_scaling: torch.Tensor | None = None,
     ) -> torch.Tensor:
         q_c = None
         kv_lora = None
@@ -154,6 +155,9 @@ class MultiHeadLatentAttentionWrapper(CustomOp):
 
         if self.indexer and self.is_sparse:
             _topk_indices = self.indexer(hidden_states, q_c, positions, self.rotary_emb)
+
+        if llama_4_scaling is not None:
+            q *= llama_4_scaling
 
         attn_out = self.mla_attn(
             q,
