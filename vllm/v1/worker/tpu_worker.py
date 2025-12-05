@@ -211,7 +211,7 @@ class TPUWorker:
         # one compiled bytecode. Having one FX graph/cached bytecode per
         # compiled model is required for `support_torch_compile` decorator to
         # skip dynamo guard.
-        self.model_runner.reset_dynamo_cache()
+        # self.model_runner.reset_dynamo_cache()
 
         # Get the maximum amount of memory used by the model weights and
         # intermediate activations.
