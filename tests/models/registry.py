@@ -359,7 +359,7 @@ _TEXT_GENERATION_EXAMPLE_MODELS = {
     ),
     "MistralForCausalLM": _HfExamplesInfo("mistralai/Mistral-7B-Instruct-v0.1"),
     "MistralLarge3ForCausalLM": _HfExamplesInfo(
-        "mistralai/Mistral-Large-3-675B-Instruct-2512-NVFP4", is_available_online=False
+        "mistralai/Mistral-Large-3-675B-Instruct-2512-NVFP4", is_available_online=True
     ),
     "MixtralForCausalLM": _HfExamplesInfo(
         "mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -866,7 +866,7 @@ _SPECULATIVE_DECODING_EXAMPLE_MODELS = {
     "EagleMistralLarge3ForCausalLM": _HfExamplesInfo(
         "mistralai/Mistral-Large-3-675B-Instruct-2512",
         speculative_model="mistralai/Mistral-Large-3-675B-Instruct-2512-Eagle",
-        is_available_online=False,
+        is_available_online=True,
     ),
     "LlamaForCausalLMEagle3": _HfExamplesInfo(
         "Qwen/Qwen3-8B",
