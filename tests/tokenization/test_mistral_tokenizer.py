@@ -91,6 +91,118 @@ from vllm.transformers_utils.tokenizers.mistral import (
                 ],
             ),
         ),
+        (
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "What is the current local date and time?",
+                    }
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "description": "Fetch the current local date and time.",
+                            "unsupported_field": False,
+                            "name": "get_current_time",
+                            "parameters": {},
+                        },
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "description": "Fetch the current local date and time.",
+                            "unsupported_field2": False,
+                            "name": "get_current_time",
+                            "parameters": {},
+                        },
+                    },
+                ],
+            },
+            (
+                [
+                    {
+                        "role": "user",
+                        "content": "What is the current local date and time?",
+                    }
+                ],
+                [
+                    {
+                        "type": "function",
+                        "function": {
+                            "description": "Fetch the current local date and time.",
+                            "name": "get_current_time",
+                            "parameters": {},
+                        },
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "description": "Fetch the current local date and time.",
+                            "name": "get_current_time",
+                            "parameters": {},
+                        },
+                    },
+                ],
+            ),
+        ),
+        (
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "What is the current local date and time?",
+                    }
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "unsupported_field": False,
+                        "function": {
+                            "description": "Fetch the current local date and time.",
+                            "name": "get_current_time",
+                            "parameters": {},
+                        },
+                    },
+                    {
+                        "type": "function",
+                        "unsupported_field2": False,
+                        "function": {
+                            "description": "Fetch the current local date and time 2.",
+                            "name": "get_current_time2",
+                            "parameters": {"a": "1"},
+                        },
+                    },
+                ],
+            },
+            (
+                [
+                    {
+                        "role": "user",
+                        "content": "What is the current local date and time?",
+                    }
+                ],
+                [
+                    {
+                        "type": "function",
+                        "function": {
+                            "description": "Fetch the current local date and time.",
+                            "name": "get_current_time",
+                            "parameters": {},
+                        },
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "description": "Fetch the current local date and time 2.",
+                            "name": "get_current_time2",
+                            "parameters": {"a": "1"},
+                        },
+                    },
+                ],
+            ),
+        ),
     ],
 )
 def test_prepare_apply_chat_template_tools_and_messages(
@@ -1088,6 +1200,17 @@ class TestMistralTokenizer:
             == expected_tokens[mistral_tokenizer.is_tekken]
         )
 
+    def test_decode_empty(
+        self,
+        mistral_tokenizer: MistralTokenizer,
+    ):
+        assert (
+            mistral_tokenizer.decode(
+                [],
+            )
+            == ""
+        )
+
     def test_decode_int(
         self,
         mistral_tokenizer: MistralTokenizer,
@@ -1100,6 +1223,45 @@ class TestMistralTokenizer:
             )
             == "<s>"
         )
+
+    @pytest.mark.parametrize(
+        "skip_special_tokens,expected_tokens",
+        (
+            (
+                False,
+                (
+                    ["<s>[INST]▁Hello▁world▁![/INST]▁Hello</s>"],
+                    ["<s>[INST]Hello world ![/INST]Hello</s>"],
+                ),
+            ),
+            (True, (["Hello world ! Hello"], ["Hello world !Hello"])),
+        ),
+    )
+    def test_batch_decode(
+        self,
+        mistral_tokenizer: MistralTokenizer,
+        skip_special_tokens: bool,
+        expected_tokens: tuple[str, str],
+    ):
+        ids = (
+            [[1, 3, 23325, 2294, 1686, 4, 23325, 2]],
+            [[1, 3, 22177, 4304, 2662, 4, 22177, 2]],
+        )
+        assert (
+            mistral_tokenizer.batch_decode(
+                ids[mistral_tokenizer.is_tekken],
+                skip_special_tokens=skip_special_tokens,
+            )
+            == expected_tokens[mistral_tokenizer.is_tekken]
+        )
+
+    def test_batch_decode_empty(
+        self,
+        mistral_tokenizer: MistralTokenizer,
+    ):
+        assert mistral_tokenizer.batch_decode(
+            [[]],
+        ) == [""]
 
     def test_convert_tokens_to_string(self, mistral_tokenizer: MistralTokenizer):
         tokens = (
