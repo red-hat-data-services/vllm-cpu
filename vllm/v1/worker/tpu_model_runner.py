@@ -27,6 +27,7 @@ from vllm.config import (
     VllmConfig,
     get_layers_from_vllm_config,
     update_config,
+    set_current_vllm_config,
 )
 from vllm.distributed.kv_transfer import get_kv_transfer_group, has_kv_transfer_group
 from vllm.distributed.kv_transfer.kv_connector.utils import copy_kv_blocks
@@ -1904,7 +1905,8 @@ class TPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
             )
             # Reset the wrapper to re-initialize.
             compiled_model.compiled = False
-            TorchCompileWithNoGuardsWrapper.__init__(compiled_model)
+            with set_current_vllm_config(self.vllm_config):
+                TorchCompileWithNoGuardsWrapper.__init__(compiled_model)
 
     @torch.compile(backend="openxla", fullgraph=True, dynamic=False)
     def select_hidden_states(self, hidden_states, indices_do_sample):
