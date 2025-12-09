@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+# check=skip=InvalidDefaultArgInFrom # defaults are specified in bakefiles
+# vim: ft=dockerfile
+
+ARG BASE_UBI_IMAGE_TAG
+ARG PYTHON_VERSION
+
+## Base Layer ##################################################################
+FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS base
+ARG PYTHON_VERSION
+ENV PYTHON_VERSION=${PYTHON_VERSION}
+
+ENV VIRTUAL_ENV=/opt/vllm
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN microdnf -y update && microdnf install -y \
+    python${PYTHON_VERSION}-pip python${PYTHON_VERSION}-wheel \
+    && microdnf clean all && \
+    python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV} && \
+    python -m pip install uv
+
+
+WORKDIR /workspace
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+COPY LICENSE /licenses/vllm.md
+COPY examples/*.jinja /app/data/template/
+RUN mkdir -p /opt/app-root && \
+    ln -s /app/data/template /opt/app-root/template
+
+
+RUN --mount=type=bind,src=payload,target=/workspace/payload \
+    ./payload/run.sh
+
+ENV HF_HUB_OFFLINE=1 \
+    VLLM_USAGE_STATS_SERVER=https://console.redhat.com/api/rhaiis-stats \
+    VLLM_USAGE_SOURCE=quay-docker-image \
+    VLLM_USE_V1=1 \
+    VLLM_WORKER_MULTIPROC_METHOD=spawn \
+    OUTLINES_CACHE_DIR=/tmp/outlines \
+    NUMBA_CACHE_DIR=/tmp/numba \
+    TRITON_CACHE_DIR=/tmp/triton \
+    VLLM_CACHE_ROOT=/tmp/vllm
+
+# setup non-root user for OpenShift
+RUN umask 002 && \
+    useradd --uid 2000 --gid 0 vllm && \
+    mkdir -p /home/vllm && \
+    chmod g+rwx /home/vllm
+
+USER 2000
+WORKDIR /home/vllm
+
+ENTRYPOINT ["python3", "-m", "vllm.entrypoints.openai.api_server"]
