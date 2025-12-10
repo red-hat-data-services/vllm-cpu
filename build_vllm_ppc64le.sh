@@ -196,6 +196,10 @@ install_numba() {
     if ! grep '#include "dynamic_annotations.h"' numba/_dispatcher.cpp; then
         sed -i '/#include "internal\/pycore_atomic.h"/i\#include "dynamic_annotations.h"' numba/_dispatcher.cpp;
     fi
+    
+    export PATH=/usr/lib64/llvm15/bin:$PATH;
+    export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
+    
     uv build --wheel --out-dir ${WHEEL_DIR}
 
     cd ${CURDIR}
