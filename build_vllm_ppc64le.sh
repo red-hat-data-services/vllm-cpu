@@ -10,7 +10,7 @@ microdnf install -y \
     git jq gcc-toolset-14 gcc-toolset-14-libatomic-devel automake libtool clang-devel openssl-devel freetype-devel fribidi-devel \
     harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel llvm15-devel \
     libraqm-devel libtiff-devel libwebp-devel libxcb-devel ninja-build openjpeg2-devel pkgconfig protobuf* \
-    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf
+    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf file
 
 # install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
