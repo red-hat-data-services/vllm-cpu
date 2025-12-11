@@ -153,20 +153,25 @@ def _remap_general_mistral_args(config: dict) -> dict:
 
 
 def _remap_mistral_quantization_args(config: dict) -> dict:
-    if config.get("quantization"):
-        quantization = config.pop("quantization", {})
-        if quantization.get("qformat_weight") == "fp8_e4m3":
-            qscheme_act = quantization.get("qscheme_act")
-            assert qscheme_act in ("NO_SCALES", "TENSOR", None), (
-                "Only NO_SCALES and TENSOR (default) are supported for qscheme_act"
-            )
-            is_dynamic = qscheme_act == "NO_SCALES"
-            config["quantization_config"] = {
-                "quant_method": "fp8",
-                "activation_scheme": "dynamic" if is_dynamic else "static",
-            }
-        else:
-            raise ValueError(f"Found unknown quantization='{quantization}' in config")
+    if not config.get("quantization"):
+        raise ValueError(f"Found empty quantization in config")
+
+    quantization = config.pop("quantization")
+    if quantization.get("qformat_weight") == "fp8_e4m3":
+        qscheme_act = quantization.get("qscheme_act")
+        assert qscheme_act in ("NO_SCALES", "TENSOR", None), (
+            "Only NO_SCALES and TENSOR (default) are supported for qscheme_act"
+        )
+        is_dynamic = qscheme_act == "NO_SCALES"
+        config["quantization_config"] = {
+            "quant_method": "fp8",
+            "activation_scheme": "dynamic" if is_dynamic else "static",
+        }
+    elif quantization.get("quant_method") == "compressed-tensors":
+        # Pass through the quantization config to compressed-tensors
+        config["quantization_config"] = quantization
+    else:
+        raise ValueError(f"Found unknown quantization='{quantization}' in config")
 
     return config
 
