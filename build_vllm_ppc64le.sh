@@ -210,7 +210,7 @@ install_numba() {
 install_llvmlite() {
     cd ${CURDIR}
 
-    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-$(curl -s https://api.github.com/repos/numba/llvmlite/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
 
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
