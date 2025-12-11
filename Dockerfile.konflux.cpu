@@ -9,7 +9,7 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builde
 
 ARG VLLM_VERSION="0.11.2"
 ARG PYTHON_VERSION=3.12
-ARG VLLM_TGIS_ADAPTER_VERSION="0.9.1"
+ARG VLLM_TGIS_ADAPTER_VERSION="0.9.2"
 ARG VLLM_TARGET_DEVICE=cpu
 
 USER root
@@ -53,9 +53,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
     uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" && \
     git clone --branch ${VLLM_TGIS_ADAPTER_VERSION} https://github.com/opendatahub-io/vllm-tgis-adapter.git /tmp/vllm-tgis-adapter && \
-    if [ "$(uname -m)" = "s390x" ]; then \
-        sed -i 's/grpcio-tools==1.75.1/grpcio-tools==1.62.1/' /tmp/vllm-tgis-adapter/pyproject.toml; \
-    fi && \
     uv build --wheel --out-dir ${WHEEL_DIR} /tmp/vllm-tgis-adapter && \
     uv pip install "$(echo ${WHEEL_DIR}/vllm_tgis_adapter-*.whl)" && \
     rm -rf /tmp/vllm-tgis-adapter
