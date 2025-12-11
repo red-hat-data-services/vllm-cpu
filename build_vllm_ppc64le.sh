@@ -17,7 +17,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 source /opt/rh/gcc-toolset-14/enable
 source /root/.cargo/env
-export PATH=$PATH:/usr/lib64/llvm15/bin
+export PATH=/usr/lib64/llvm15/bin:$PATH;
+export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
+
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
@@ -196,10 +198,6 @@ install_numba() {
     if ! grep '#include "dynamic_annotations.h"' numba/_dispatcher.cpp; then
         sed -i '/#include "internal\/pycore_atomic.h"/i\#include "dynamic_annotations.h"' numba/_dispatcher.cpp;
     fi
-    
-    export PATH=/usr/lib64/llvm15/bin:$PATH;
-    export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
-    
     uv build --wheel --out-dir ${WHEEL_DIR}
 
     cd ${CURDIR}
