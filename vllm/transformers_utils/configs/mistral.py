@@ -154,7 +154,7 @@ def _remap_general_mistral_args(config: dict) -> dict:
 
 def _remap_mistral_quantization_args(config: dict) -> dict:
     if not config.get("quantization"):
-        raise ValueError(f"Found empty quantization in config")
+        raise ValueError("Found empty quantization in config")
 
     quantization = config.pop("quantization")
     if quantization.get("qformat_weight") == "fp8_e4m3":
