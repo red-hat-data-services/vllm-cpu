@@ -122,7 +122,7 @@ ENV TIKTOKEN_RS_CACHE_DIR=${TIKTOKEN_CACHE_DIR}
 RUN --mount=type=bind,src=tools/predownload_tiktoken_tokenizers.py,target=predownload_tiktoken_tokenizers.py \
     python predownload_tiktoken_tokenizers.py && \
     chmod g+rwx "${TIKTOKEN_CACHE_DIR}" && \
-    chown -R vllm:vllm ~/.cache
+    chown -R vllm:0 ~/.cache
 
 USER 2000
 WORKDIR /home/vllm

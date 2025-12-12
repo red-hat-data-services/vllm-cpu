@@ -26,8 +26,8 @@ from vllm.config import (
     ParallelConfig,
     VllmConfig,
     get_layers_from_vllm_config,
-    update_config,
     set_current_vllm_config,
+    update_config,
 )
 from vllm.distributed.kv_transfer import get_kv_transfer_group, has_kv_transfer_group
 from vllm.distributed.kv_transfer.kv_connector.utils import copy_kv_blocks
