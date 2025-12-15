@@ -352,6 +352,22 @@ struct FP32Vec16 : public Vec<FP32Vec16> {
                                 vec_div(reg.val[3], b.reg.val[3])}));
   }
 
+  FP32Vec16 max(const FP32Vec16& b) const {
+    return FP32Vec16(f32x4x4_t({vec_max(reg.val[0], b.reg.val[0]),
+                                vec_max(reg.val[1], b.reg.val[1]),
+                                vec_max(reg.val[2], b.reg.val[2]),
+                                vec_max(reg.val[3], b.reg.val[3])}));
+  }
+
+  float reduce_max() {
+    __vector float max01 = vec_max(reg.val[0], reg.val[1]);
+    __vector float max23 = vec_max(reg.val[2], reg.val[3]);
+    __vector float max_all = vec_max(max01, max23);
+    __vector float temp = vec_max(max_all, vec_sld(max_all, max_all, 8));
+    temp = vec_max(temp, vec_sld(temp, temp, 4));
+    return vec_extract(temp, 0);
+  }
+
   float reduce_sum() const {
     AliasReg ar;
     ar.reg = reg;
