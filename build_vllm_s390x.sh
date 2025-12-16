@@ -89,7 +89,7 @@ export C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 # -------------------------
 # PyTorch
 # -------------------------
-export TORCH_VERSION=2.7.0
+export TORCH_VERSION=2.8.0
 export _GLIBCXX_USE_CXX11_ABI=1
 export CARGO_HOME=/root/.cargo
 export RUSTUP_HOME=/root/.rustup
