@@ -9,8 +9,10 @@ from vllm.logger import init_logger
 logger = init_logger(__name__)
 
 
-def adapt_config_dict(config_dict: dict[str, Any], **kwargs) -> PretrainedConfig:
-    config_dict.update(kwargs)
+def adapt_config_dict(
+    config_dict: dict[str, Any],
+    defaults: dict[str, Any],
+) -> PretrainedConfig:
     config_dict = _remap_general_mistral_args(config_dict)
 
     if bool(config_dict.get("quantization")):
@@ -76,6 +78,9 @@ def adapt_config_dict(config_dict: dict[str, Any], **kwargs) -> PretrainedConfig
     if is_audio:
         config_dict = _remap_mistral_audio_args(config_dict)
 
+    for k, v in defaults.items():
+        config_dict.setdefault(k, v)
+
     config = PretrainedConfig.from_dict(config_dict)
 
     logger.debug("Initialized config %s", config)
@@ -110,13 +115,17 @@ def _remap_mistral_yarn_args(config: dict) -> dict:
         "apply_scale": "apply_yarn_scaling",
     }
     yarn_config = config.get("yarn") or {}
-    config["rope_scaling"] = {
+    config["rope_parameters"] = {
         "rope_type": "yarn",
         "mscale_all_dim": 1,
     }
+
+    if rope_theta := config.pop("rope_theta", None):
+        config["rope_parameters"]["rope_theta"] = rope_theta
+
     for old_name, new_name in yarn_config_map.items():
         if old_name in yarn_config:
-            config["rope_scaling"][new_name] = yarn_config.pop(old_name)
+            config["rope_parameters"][new_name] = yarn_config.pop(old_name)
 
     assert len(yarn_config) == 0, f"Unparsed yarn config: {yarn_config}"
 
@@ -138,7 +147,7 @@ def _remap_general_mistral_args(config: dict) -> dict:
         "model_type": ("model_type", "transformer"),
         "hidden_act": ("activation", "silu"),
         "tie_word_embeddings": ("tied_embeddings", False),
-        "max_seq_len": ("max_seq_len", 128_000),
+        "max_seq_len": ("max_seq_len", config.get("max_position_embeddings", 128_000)),
         "max_position_embeddings": ("max_position_embeddings", 128_000),
     }
 
@@ -153,25 +162,20 @@ def _remap_general_mistral_args(config: dict) -> dict:
 
 
 def _remap_mistral_quantization_args(config: dict) -> dict:
-    if not config.get("quantization"):
-        raise ValueError("Found empty quantization in config")
-
-    quantization = config.pop("quantization")
-    if quantization.get("qformat_weight") == "fp8_e4m3":
-        qscheme_act = quantization.get("qscheme_act")
-        assert qscheme_act in ("NO_SCALES", "TENSOR", None), (
-            "Only NO_SCALES and TENSOR (default) are supported for qscheme_act"
-        )
-        is_dynamic = qscheme_act == "NO_SCALES"
-        config["quantization_config"] = {
-            "quant_method": "fp8",
-            "activation_scheme": "dynamic" if is_dynamic else "static",
-        }
-    elif quantization.get("quant_method") == "compressed-tensors":
-        # Pass through the quantization config to compressed-tensors
-        config["quantization_config"] = quantization
-    else:
-        raise ValueError(f"Found unknown quantization='{quantization}' in config")
+    if config.get("quantization"):
+        quantization = config.pop("quantization", {})
+        if quantization.get("qformat_weight") == "fp8_e4m3":
+            qscheme_act = quantization.get("qscheme_act")
+            assert qscheme_act in ("NO_SCALES", "TENSOR", None), (
+                "Only NO_SCALES and TENSOR (default) are supported for qscheme_act"
+            )
+            is_dynamic = qscheme_act == "NO_SCALES"
+            config["quantization_config"] = {
+                "quant_method": "fp8",
+                "activation_scheme": "dynamic" if is_dynamic else "static",
+            }
+        else:
+            raise ValueError(f"Found unknown quantization='{quantization}' in config")
 
     return config
 
