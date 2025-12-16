@@ -93,7 +93,7 @@ RUN if [ "$(uname -m)" = "s390x" ]; then \
     openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
     clang llvm-devel llvm clang-devel git perl-core \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
-    && microdnf clean all; \
+    && microdnf update -y && microdnf clean all; \
     fi
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
