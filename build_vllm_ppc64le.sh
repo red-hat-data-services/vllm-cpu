@@ -258,6 +258,7 @@ install_xgrammar
 
 # back to vLLM root
 cd ${CURDIR}
+source /opt/rh/gcc-toolset-14/enable
 
 uv pip install ${WHEEL_DIR}/*.whl
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
