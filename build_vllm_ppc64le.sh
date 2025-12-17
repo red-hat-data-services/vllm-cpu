@@ -229,12 +229,30 @@ install_llvmlite() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
+install_xgrammar() {
+    cd ${CURDIR}
+
+    export XGRAMMAR_VERSION=$(grep -Eo '^xgrammar.+;' requirements/common.txt | grep -Eo '\b[0-9\.]+\b' | tail -1)
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Building xgrammar using gcc13  ==================
+    microdnf install -y gcc-toolset-13 && source /opt/rh/gcc-toolset-13/enable
+    git clone --recursive https://github.com/mlc-ai/xgrammar -b v${XGRAMMAR_VERSION}
+    cd xgrammar
+    cp cmake/config.cmake .
+    uv build --wheel --out-dir ${WHEEL_DIR}
+    microdnf remove gcc-toolset-13 -y
+}
+
 install_torch_family
 install_pyarrow
 install_llvmlite
 install_numba
 install_pillow
 install_pyzmq
+install_xgrammar
 
 #wait $(jobs -p)
 
