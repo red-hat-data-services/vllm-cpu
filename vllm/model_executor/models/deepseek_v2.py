@@ -495,10 +495,10 @@ class DeepseekV2Attention(nn.Module):
             quant_config=quant_config,
             prefix=f"{prefix}.o_proj",
         )
-        if config.rope_parameters["rope_type"] != "default":
-            config.rope_parameters["rope_type"] = (
+        if rope_scaling:
+            rope_scaling["rope_type"] = (
                 "deepseek_yarn"
-                if config.rope_parameters.get("apply_yarn_scaling", True)
+                if rope_scaling.get("apply_yarn_scaling", True)
                 else "deepseek_llama_scaling"
             )
 
@@ -511,12 +511,9 @@ class DeepseekV2Attention(nn.Module):
             is_neox_style=False,
         )
 
-        if (
-            config.rope_parameters["rope_type"] != "default"
-            and config.rope_parameters["rope_type"] == "deepseek_yarn"
-        ):
-            mscale_all_dim = config.rope_parameters.get("mscale_all_dim", False)
-            scaling_factor = config.rope_parameters["factor"]
+        if rope_scaling and rope_scaling["rope_type"] == "deepseek_yarn":
+            mscale_all_dim = rope_scaling.get("mscale_all_dim", False)
+            scaling_factor = rope_scaling["factor"]
             mscale = yarn_get_mscale(scaling_factor, float(mscale_all_dim))
             self.scaling = self.scaling * mscale * mscale
 
@@ -1004,10 +1001,10 @@ class DeepseekV2MLAAttention(nn.Module):
             prefix=f"{prefix}.o_proj",
         )
 
-        if config.rope_parameters["rope_type"] != "default":
-            config.rope_parameters["rope_type"] = (
+        if rope_scaling:
+            rope_scaling["rope_type"] = (
                 "deepseek_yarn"
-                if config.rope_parameters.get("apply_yarn_scaling", True)
+                if rope_scaling.get("apply_yarn_scaling", True)
                 else "deepseek_llama_scaling"
             )
 
@@ -1020,12 +1017,9 @@ class DeepseekV2MLAAttention(nn.Module):
             is_neox_style=False,
         )
 
-        if (
-            config.rope_parameters["rope_type"] != "default"
-            and config.rope_parameters["rope_type"] == "deepseek_yarn"
-        ):
-            mscale_all_dim = config.rope_parameters.get("mscale_all_dim", False)
-            scaling_factor = config.rope_parameters["factor"]
+        if rope_scaling and rope_scaling["rope_type"] == "deepseek_yarn":
+            mscale_all_dim = rope_scaling.get("mscale_all_dim", False)
+            scaling_factor = rope_scaling["factor"]
             mscale = yarn_get_mscale(scaling_factor, float(mscale_all_dim))
             self.scaling = self.scaling * mscale * mscale
 
