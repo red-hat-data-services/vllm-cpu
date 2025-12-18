@@ -19,7 +19,7 @@ variable "PYTHON_VERSION" {
 
 variable "ROCM_VERSION" {
   # This can be overridden by the prepare-payload action
-  default = "6.3.4"
+  default = "6.4.3"
 }
 
 
@@ -29,7 +29,7 @@ target "_common" {
   context = "."
 
   args = {
-    BASE_UBI_IMAGE_TAG = "9.5-1742914212"
+    BASE_UBI_IMAGE_TAG = "9.6-1760515502"
     PYTHON_VERSION = "3.12"
   }
 
@@ -49,6 +49,7 @@ group "default" {
   targets = [
     "cuda",
     "rocm",
+    "tpu",
   ]
 }
 
@@ -59,7 +60,7 @@ target "cuda" {
   args = {
     PYTHON_VERSION = "${PYTHON_VERSION}"
     CUDA_MAJOR =  "12"
-    CUDA_MINOR =  "8"
+    CUDA_MINOR =  "9"
   }
 
   tags = [
@@ -85,4 +86,21 @@ target "rocm" {
     "${REPOSITORY}:rocm-${GITHUB_RUN_ID}",
     RELEASE_IMAGE ? "quay.io/vllm/vllm-rocm:${replace(VLLM_VERSION, "+", "_")}" : ""
   ]
+}
+
+target "tpu" {
+  inherits = ["_common"]
+  dockerfile = "Dockerfile.tpu.ubi"
+
+  args = {
+    PYTHON_VERSION = "${PYTHON_VERSION}"
+  }
+
+  tags = [
+    "${REPOSITORY}:${replace(VLLM_VERSION, "+", "_")}", # vllm_version might contain local version specifiers (+) which are not valid tags
+    "${REPOSITORY}:tpu-${GITHUB_SHA}",
+    "${REPOSITORY}:tpu-${GITHUB_RUN_ID}",
+    RELEASE_IMAGE ? "quay.io/vllm/vllm-tpu:${replace(VLLM_VERSION, "+", "_")}" : ""
+  ]
+
 }
