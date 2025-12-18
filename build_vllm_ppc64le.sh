@@ -10,14 +10,16 @@ microdnf install -y \
     git jq gcc-toolset-14 gcc-toolset-14-libatomic-devel automake libtool clang-devel openssl-devel freetype-devel fribidi-devel \
     harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel llvm15-devel \
     libraqm-devel libtiff-devel libwebp-devel libxcb-devel ninja-build openjpeg2-devel pkgconfig protobuf* \
-    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf
+    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf file
 
 # install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 source /opt/rh/gcc-toolset-14/enable
 source /root/.cargo/env
-export PATH=$PATH:/usr/lib64/llvm15/bin
+export PATH=/usr/lib64/llvm15/bin:$PATH;
+export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
+
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
@@ -206,7 +208,7 @@ install_numba() {
 install_llvmlite() {
     cd ${CURDIR}
 
-    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-$(curl -s https://api.github.com/repos/numba/llvmlite/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
 
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
@@ -227,17 +229,36 @@ install_llvmlite() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
+install_xgrammar() {
+    cd ${CURDIR}
+
+    export XGRAMMAR_VERSION=$(grep -Eo '^xgrammar.+;' requirements/common.txt | grep -Eo '\b[0-9\.]+\b' | tail -1)
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Building xgrammar using gcc13  ==================
+    microdnf install -y gcc-toolset-13 && source /opt/rh/gcc-toolset-13/enable
+    git clone --recursive https://github.com/mlc-ai/xgrammar -b v${XGRAMMAR_VERSION}
+    cd xgrammar
+    cp cmake/config.cmake .
+    uv build --wheel --out-dir ${WHEEL_DIR}
+    microdnf remove gcc-toolset-13 -y
+}
+
 install_torch_family
 install_pyarrow
 install_llvmlite
 install_numba
 install_pillow
 install_pyzmq
+install_xgrammar
 
 #wait $(jobs -p)
 
 # back to vLLM root
 cd ${CURDIR}
+source /opt/rh/gcc-toolset-14/enable
 
 uv pip install ${WHEEL_DIR}/*.whl
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
