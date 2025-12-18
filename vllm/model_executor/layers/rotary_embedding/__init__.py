@@ -225,8 +225,8 @@ def get_rope(
                     **extra_kwargs,
                 )
         elif scaling_type in ["deepseek_yarn", "deepseek_llama_scaling"]:
-            scaling_factor = rope_parameters["factor"]
-            original_max_position = rope_parameters["original_max_position_embeddings"]
+            scaling_factor = rope_scaling["factor"]
+            original_max_position = rope_scaling["original_max_position_embeddings"]
             # assert max_position == original_max_position * scaling_factor
             extra_kwargs = {
                 k: v
