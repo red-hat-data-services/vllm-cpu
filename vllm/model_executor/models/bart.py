@@ -880,8 +880,13 @@ class BartForConditionalGeneration(nn.Module, SupportsV0Only, SupportsQuant):
                     or 'encoder.embed_tokens.weight' in name
                     or 'decoder.embed_tokens.weight' in name
                     or 'lm_head.weight' in name):
-                assert shared_embedding_weight is None, (
-                    "Conflicting embedding weights.")
+                if shared_embedding_weight is not None:
+                    logger.warning(
+                        "Shared weight embedding already loaded with name "
+                        "%s, skipping. This is expected on facebook/bart-large"
+                        " like models, where the same shared embedding is "
+                        "present multiple times.", name)
+                    continue
                 shared_embedding_weight = loaded_weight
 
         loader = AutoWeightsLoader(
