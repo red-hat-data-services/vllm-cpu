@@ -683,7 +683,14 @@ void top_k_per_row_decode(const torch::Tensor& logits, int64_t next_n,
             static_cast<int>(stride1), static_cast<int>(topK),
             static_cast<int>(next_n), outLogitsAux.data_ptr<float>());
 
+    // Use 512 threads for ROCm to avoid exceeding local memory limit on gfx1100
+    // gfx1100 has a 64KB local memory limit, and 1024 threads causes the kernel
+    // to require ~66KB which exceeds this limit
+#if defined(USE_ROCM) && defined(__gfx1100__)
+    constexpr int kNumThreadsPerBlockMerge = 512;
+#else
     constexpr int kNumThreadsPerBlockMerge = 1024;
+#endif
     vllm::topKPerRowDecode<kNumThreadsPerBlockMerge, true, false, true>
         <<<numRows, kNumThreadsPerBlockMerge, topK * sizeof(int32_t), stream>>>(
             outLogitsAux.data_ptr<float>(), seqLens.data_ptr<int>(),
