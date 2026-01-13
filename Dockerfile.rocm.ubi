@@ -70,16 +70,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 ENV PATH=/opt/rocm/bin:$PATH
 
-FROM rocm_base as build_amdsmi
-
-RUN microdnf -y install \
-    amd-smi-lib && \
-    microdnf clean all
-
-WORKDIR /opt/rocm/share/amd_smi
-
-RUN python setup.py bdist_wheel --dist-dir=/dist/
-
 ##################################################################################################
 
 FROM rocm_base AS vllm-openai
@@ -94,8 +84,7 @@ ENV PATH=$VIRTUAL_ENV/bin:$PATH
 RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs gcc rsync && \
     microdnf clean all
 
-RUN --mount=type=bind,from=build_amdsmi,src=/dist,target=/install/amdsmi/ \
-    --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,src=payload,target=/workspace/payload \
     ./payload/run.sh
 
