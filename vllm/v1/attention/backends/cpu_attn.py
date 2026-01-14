@@ -135,7 +135,6 @@ class CPUAttentionMetadataBuilder(AttentionMetadataBuilder[CPUAttentionMetadata]
             self.window_size = -1
         self.block_size = vllm_config.cache_config.block_size
         self.isa = _get_attn_isa(self.dtype, self.block_size, self.head_dim)
-        self.is_cross_attention = isinstance(kv_cache_spec, CrossAttentionSpec)
 
     def build(
         self,
@@ -478,33 +477,10 @@ def _make_sliding_window_bias(
     return attn_biases
 
 
-def _is_avx512_compiled() -> bool:
-    """Check if the _C extension was compiled with AVX512 support.
-
-    When built with VLLM_CPU_DISABLE_AVX512=true, the __AVX512F__ define
-    is absent and AVX512-only ops (like shm_allreduce) are not registered.
-    """
-    try:
-        torch.ops._C.shm_allreduce  # noqa: B018
-        return True
-    except AttributeError:
-        return False
-
-
-@lru_cache(maxsize=1)
-def _compiled_avx512() -> bool:
-    return _is_avx512_compiled()
-
-
-def _get_attn_isa(
-    dtype: torch.dtype, block_size: int, head_size: int | None = None
-) -> str:
+def _get_attn_isa(dtype: torch.dtype, block_size: int, head_size: int | None = None) -> str:
     if head_size is not None and head_size % 32 != 0 and head_size % 16 == 0:
         return "vec16"
-    supports_amx = (torch._C._cpu._is_amx_tile_supported()
-                    and _compiled_avx512())
-    supports_arm = current_platform.get_cpu_architecture() == CpuArchEnum.ARM
-    supports_vxe = current_platform.get_cpu_architecture() == CpuArchEnum.S390X
+    supports_amx = torch._C._cpu._is_amx_tile_supported()
     if supports_amx and dtype in (torch.bfloat16,) and block_size % 32 == 0:
         return "amx"
     elif block_size % 32 == 0:
