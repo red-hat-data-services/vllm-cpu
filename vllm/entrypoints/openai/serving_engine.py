@@ -85,7 +85,13 @@ from vllm.entrypoints.responses_utils import (
     construct_input_messages,
 )
 from vllm.entrypoints.serve.disagg.protocol import GenerateRequest, GenerateResponse
-from vllm.entrypoints.utils import _validate_truncation_size
+from vllm.entrypoints.serve.tokenize.protocol import (
+    DetokenizeRequest,
+    TokenizeChatRequest,
+    TokenizeCompletionRequest,
+    TokenizeResponse,
+)
+from vllm.entrypoints.utils import _validate_truncation_size, sanitize_message
 from vllm.inputs.data import PromptType, TokensPrompt
 from vllm.inputs.parse import (
     PromptComponents,
@@ -746,14 +752,53 @@ class OpenAIServing:
         err_type: str = "BadRequestError",
         status_code: HTTPStatus = HTTPStatus.BAD_REQUEST,
     ) -> ErrorResponse:
+        exc: Exception | None = None
+
+        param = None
+        if isinstance(message, Exception):
+            exc = message
+
+            from vllm.exceptions import VLLMValidationError
+
+            if isinstance(exc, VLLMValidationError):
+                err_type = "BadRequestError"
+                status_code = HTTPStatus.BAD_REQUEST
+                param = exc.parameter
+            elif isinstance(exc, (ValueError, TypeError, RuntimeError, OverflowError)):
+                # Common validation errors from user input
+                err_type = "BadRequestError"
+                status_code = HTTPStatus.BAD_REQUEST
+                param = None
+            elif isinstance(exc, NotImplementedError):
+                err_type = "NotImplementedError"
+                status_code = HTTPStatus.NOT_IMPLEMENTED
+                param = None
+            elif exc.__class__.__name__ == "TemplateError":
+                # jinja2.TemplateError (avoid importing jinja2)
+                err_type = "BadRequestError"
+                status_code = HTTPStatus.BAD_REQUEST
+                param = None
+            else:
+                err_type = "InternalServerError"
+                status_code = HTTPStatus.INTERNAL_SERVER_ERROR
+                param = None
+
+            message = str(exc)
+
         if self.log_error_stack:
             exc_type, _, _ = sys.exc_info()
             if exc_type is not None:
                 traceback.print_exc()
             else:
                 traceback.print_stack()
+
         return ErrorResponse(
-            error=ErrorInfo(message=message, type=err_type, code=status_code.value)
+            error=ErrorInfo(
+                message=sanitize_message(message),
+                type=err_type,
+                code=status_code.value,
+                param=param,
+            )
         )
 
     def create_streaming_error_response(
