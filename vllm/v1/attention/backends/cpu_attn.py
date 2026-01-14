@@ -135,7 +135,10 @@ class CPUAttentionMetadataBuilder(AttentionMetadataBuilder[CPUAttentionMetadata]
             self.window_size = -1
         self.block_size = vllm_config.cache_config.block_size
         self.isa = _get_attn_isa(self.dtype, self.block_size, self.head_dim)
+<<<<<<< HEAD
         self.is_cross_attention = isinstance(kv_cache_spec, CrossAttentionSpec)
+=======
+>>>>>>> 26a4ed803 (cpu-atten-fix)
 
     def build(
         self,
@@ -478,6 +481,7 @@ def _make_sliding_window_bias(
     return attn_biases
 
 
+<<<<<<< HEAD
 def _is_avx512_compiled() -> bool:
     """Check if the _C extension was compiled with AVX512 support.
 
@@ -504,6 +508,12 @@ def _get_attn_isa(
     supports_amx = torch.cpu._is_amx_tile_supported()
     supports_arm = current_platform.get_cpu_architecture() == CpuArchEnum.ARM
     supports_vxe = current_platform.get_cpu_architecture() == CpuArchEnum.S390X
+=======
+def _get_attn_isa(dtype: torch.dtype, block_size: int, head_size: int | None = None) -> str:
+    if head_size is not None and head_size % 32 != 0 and head_size % 16 == 0:
+        return "vec16"
+    supports_amx = torch._C._cpu._is_amx_tile_supported()
+>>>>>>> 26a4ed803 (cpu-atten-fix)
     if supports_amx and dtype in (torch.bfloat16,) and block_size % 32 == 0:
         return "amx"
     elif block_size % 32 == 0:
