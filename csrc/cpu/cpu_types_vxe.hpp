@@ -601,13 +601,6 @@ struct FP32Vec16 : public Vec<FP32Vec16> {
     return result;
   }
 
-  FP32Vec16 max(const FP32Vec16& b) const {
-    return FP32Vec16(f32x4x4_t({vec_max(reg.val[0], b.reg.val[0]),
-                                vec_max(reg.val[1], b.reg.val[1]),
-                                vec_max(reg.val[2], b.reg.val[2]),
-                                vec_max(reg.val[3], b.reg.val[3])}));
-  }
-
   float reduce_max() const {
     AliasReg ar;
     ar.reg = reg;
