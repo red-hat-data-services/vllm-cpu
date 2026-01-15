@@ -36,7 +36,9 @@
     switch (HEAD_DIM) {                                         \
       CPU_ATTN_DISPATCH_CASE(32, __VA_ARGS__)                   \
       CPU_ATTN_DISPATCH_CASE(64, __VA_ARGS__)                   \
+      CPU_ATTN_DISPATCH_CASE(80, __VA_ARGS__)                   \
       CPU_ATTN_DISPATCH_CASE(96, __VA_ARGS__)                   \
+      CPU_ATTN_DISPATCH_CASE(112, __VA_ARGS__)                  \
       CPU_ATTN_DISPATCH_CASE(128, __VA_ARGS__)                  \
       CPU_ATTN_DISPATCH_CASE(160, __VA_ARGS__)                  \
       CPU_ATTN_DISPATCH_CASE(192, __VA_ARGS__)                  \
