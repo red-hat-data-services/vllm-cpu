@@ -7,9 +7,8 @@ ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builder-base
 
-ARG VLLM_VERSION="0.11.2"
+ARG VLLM_VERSION="0.13.0"
 ARG PYTHON_VERSION=3.12
-ARG VLLM_TGIS_ADAPTER_VERSION="0.10.0"
 ARG VLLM_TARGET_DEVICE=cpu
 
 USER root
@@ -51,11 +50,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -U setuptools && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \
       --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
-    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" && \
-    git clone --branch ${VLLM_TGIS_ADAPTER_VERSION} https://github.com/opendatahub-io/vllm-tgis-adapter.git /tmp/vllm-tgis-adapter && \
-    uv build --wheel --out-dir ${WHEEL_DIR} /tmp/vllm-tgis-adapter && \
-    uv pip install "$(echo ${WHEEL_DIR}/vllm_tgis_adapter-*.whl)" && \
-    rm -rf /tmp/vllm-tgis-adapter
+    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]"
 
 ###############################################################
 #                   FINAL VLLM IMAGE STAGE                    #
@@ -83,7 +78,7 @@ ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
 ENV OMP_NUM_THREADS=16
 ENV UV_LINK_MODE=copy
-ARG VLLM_VERSION="0.11.2"
+ARG VLLM_VERSION="0.13.0"
 
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
@@ -173,28 +168,6 @@ COPY examples/*.jinja /app/data/template/
 USER 2000
 
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
-
-FROM vllm-openai AS vllm-grpc-adapter
-
-USER root
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,from=builder-base,source=/wheelsdir/,target=/wheelsdir/,ro \
-    HOME=/root uv pip install \
-    $(echo /wheelsdir/vllm*.whl)[tensorizer] \
-    $(echo /wheelsdir/vllm_tgis_adapter-*.whl)
-
-ENV GRPC_PORT=8033 \
-    PORT=8000 \
-    # As an optimization, vLLM disables logprobs when using spec decoding by
-    # default, but this would be unexpected to users of a hosted model that
-    # happens to have spec decoding
-    # see: https://github.com/vllm-project/vllm/pull/6485
-    DISABLE_LOGPROBS_DURING_SPEC_DECODING=false
-
-USER 2000
-
-ENTRYPOINT ["python", "-m", "vllm_tgis_adapter", "--uvicorn-log-level=warning"]
 
 LABEL name="rhoai/odh-vllm-cpu-rhel9" \
     com.redhat.component="odh-vllm-cpu-rhel9" \

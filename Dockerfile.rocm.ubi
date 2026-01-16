@@ -70,16 +70,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 ENV PATH=/opt/rocm/bin:$PATH
 
-FROM rocm_base as build_amdsmi
-
-RUN microdnf -y install \
-    amd-smi-lib && \
-    microdnf clean all
-
-WORKDIR /opt/rocm/share/amd_smi
-
-RUN python setup.py bdist_wheel --dist-dir=/dist/
-
 ##################################################################################################
 
 FROM rocm_base AS vllm-openai
@@ -94,8 +84,7 @@ ENV PATH=$VIRTUAL_ENV/bin:$PATH
 RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs gcc rsync && \
     microdnf clean all
 
-RUN --mount=type=bind,from=build_amdsmi,src=/dist,target=/install/amdsmi/ \
-    --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,src=payload,target=/workspace/payload \
     ./payload/run.sh
 
@@ -127,7 +116,8 @@ ENV TIKTOKEN_CACHE_DIR=${HOME}/.cache/tiktoken
 ENV TIKTOKEN_RS_CACHE_DIR=${TIKTOKEN_CACHE_DIR}
 RUN --mount=type=bind,src=tools/predownload_tiktoken_tokenizers.py,target=predownload_tiktoken_tokenizers.py \
     python predownload_tiktoken_tokenizers.py && \
-    chmod g+rwx "${TIKTOKEN_CACHE_DIR}"
+    chmod g+rwx "${TIKTOKEN_CACHE_DIR}" && \
+    chown -R vllm:0 ~/.cache
 
 COPY LICENSE /licenses/vllm.md
 COPY examples/*.jinja /app/data/template/
