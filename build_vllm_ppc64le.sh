@@ -119,6 +119,7 @@ install_torch_family() {
     export _GLIBCXX_USE_CXX11_ABI=1
     git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
     cd pytorch
+    sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
     uv pip install -r requirements.txt
     python setup.py develop
     rm -f dist/torch*+git*whl
