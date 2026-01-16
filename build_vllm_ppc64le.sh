@@ -53,10 +53,6 @@ curl -L https://github.com/OpenMathLib/OpenBLAS/releases/download/v${OPENBLAS_VE
 mv OpenBLAS-${OPENBLAS_VERSION}/ OpenBLAS/
 cd OpenBLAS/
 
-# Apply the patch below to add Power11 support if OpenBLAS being built here is less than or equal to 0.3.30.
-curl -Lo power11.patch https://github.com/OpenMathLib/OpenBLAS/pull/5354.patch
-git apply power11.patch
-
 make -j${MAX_JOBS} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS=120 DYNAMIC_ARCH=1 INTERFACE64=0 && make install
 
 # set path for openblas
