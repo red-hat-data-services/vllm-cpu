@@ -10,8 +10,9 @@ For more details:
 - https://issues.redhat.com/browse/INFERENG-2959
 """
 
-import tiktoken
 import os
+
+import tiktoken
 
 TIKTOKEN_CACHE_DIRS = (
     "TIKTOKEN_CACHE_DIR",

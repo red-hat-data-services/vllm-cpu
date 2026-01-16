@@ -53,10 +53,6 @@ curl -L https://github.com/OpenMathLib/OpenBLAS/releases/download/v${OPENBLAS_VE
 mv OpenBLAS-${OPENBLAS_VERSION}/ OpenBLAS/
 cd OpenBLAS/
 
-# Apply the patch below to add Power11 support if OpenBLAS being built here is less than or equal to 0.3.30.
-curl -Lo power11.patch https://github.com/OpenMathLib/OpenBLAS/pull/5354.patch
-git apply power11.patch
-
 make -j${MAX_JOBS} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS=120 DYNAMIC_ARCH=1 INTERFACE64=0 && make install
 
 # set path for openblas
@@ -111,7 +107,9 @@ install_torch_family() {
     cd ${CURDIR}
 
     export TORCH_VERSION=${TORCH_VERSION:-$(grep -E '^torch==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
+    TORCHVISION_VERSION=0.24.1
     export TORCHVISION_VERSION=${TORCHVISION_VERSION:-$(grep -E '^torchvision==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
+    TORCHAUDIO_VERSION=2.9.1
     export TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$(grep -E '^torchaudio==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
     
     TEMP_BUILD_DIR=$(mktemp -d)
@@ -121,6 +119,7 @@ install_torch_family() {
     export _GLIBCXX_USE_CXX11_ABI=1
     git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
     cd pytorch
+    sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
     uv pip install -r requirements.txt
     python setup.py develop
     rm -f dist/torch*+git*whl
