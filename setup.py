@@ -809,8 +809,8 @@ setup(
         "petit-kernel": ["petit-kernel"],
         # Workaround to https://issues.redhat.com/browse/AIPCC-8724
         # required for ray Compiled Graph/pipeline parallelism
-        "cgraph-cuda12": ["cupy-cuda-12x"],
-        "cgraph-cuda13": ["cupy-cuda-13x"]
+        "cgraph-cuda12": ["cupy-cuda12x"],
+        "cgraph-cuda13": ["cupy-cuda13x"]
     },
     cmdclass=cmdclass,
     package_data=package_data,
