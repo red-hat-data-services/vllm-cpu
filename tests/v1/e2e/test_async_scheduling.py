@@ -153,7 +153,7 @@ def run_tests(
         else:
             m.setenv("VLLM_ATTENTION_BACKEND", "FLEX_ATTENTION")
         # lock matmul precision to full FP32 (IEEE)
-        m.setenv("VLLM_FLOAT32_MATMUL_PRECISION", "ieee")
+        m.setenv("VLLM_FLOAT32_MATMUL_PRECISION", "highest")
         # m.setenv("VLLM_BATCH_INVARIANT", "1")
         outputs: list[tuple[str, list, list]] = []
         for n, (
