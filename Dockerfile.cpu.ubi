@@ -62,6 +62,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,src=payload,target=/workspace/payload \
     ./payload/run.sh
 
+# VLLM_TARGET_DEVICE=cpu is required to force CPU platform
 ENV HF_HUB_OFFLINE=1 \
     HOME=/home/vllm \
     VLLM_USAGE_STATS_SERVER=https://console.redhat.com/api/rhaiis-stats \
@@ -70,7 +71,7 @@ ENV HF_HUB_OFFLINE=1 \
     NUMBA_CACHE_DIR=/tmp/numba \
     TRITON_CACHE_DIR=/tmp/triton \
     VLLM_CACHE_ROOT=/tmp/vllm \
-    VLLM_TARGET_DEVICE=cpu # required to force CPU platform
+    VLLM_TARGET_DEVICE=cpu
 
 # setup non-root user for OpenShift
 RUN umask 002 && \
