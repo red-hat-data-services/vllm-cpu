@@ -451,6 +451,15 @@ class MistralTokenizer(TokenizerLike):
         return self.transformers_tokenizer.convert_tokens_to_ids(tokens)
 
     def convert_tokens_to_string(self, tokens: list[str]) -> str:
+        from mistral_common.tokens.tokenizers.base import (
+            SpecialTokenPolicy,
+            SpecialTokens,
+        )
+        from mistral_common.tokens.tokenizers.sentencepiece import (
+            SentencePieceTokenizer,
+        )
+        from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+
         to_decode_special_tokens = {SpecialTokens.tool_calls}
         if self.is_tekken:
             assert isinstance(self.tokenizer, Tekkenizer), type(self.tokenizer)

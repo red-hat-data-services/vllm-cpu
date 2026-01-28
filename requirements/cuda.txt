@@ -1,10 +1,10 @@
 # Common dependencies
 -r common.txt
 
-numba == 0.61.2 # Required for N-gram speculative decoding
+numba == 0.63.1 # Required for N-gram speculative decoding # bumped to 0.63.1 to fix a crash on CUDA 13 https://issues.redhat.com/browse/AIPCC-9384
 
 # Dependencies for NVIDIA GPUs
-ray[cgraph]>=2.48.0 # Ray Compiled Graph, required for pipeline parallelism in V1.
+ray>=2.48.0
 torch==2.9.1
 torchaudio==2.9.1
 # These must be updated alongside torch
