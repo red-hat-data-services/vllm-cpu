@@ -92,7 +92,6 @@ from vllm.entrypoints.utils import (
     sanitize_message,
     with_cancellation,
 )
-from vllm.exceptions import VLLMValidationError
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParserManager
 from vllm.tasks import POOLING_TASKS

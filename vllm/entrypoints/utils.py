@@ -238,8 +238,6 @@ def get_max_tokens(
 
 
 def log_non_default_args(args: Namespace | EngineArgs):
-    from vllm.entrypoints.openai.cli_args import make_arg_parser
-
     non_default_args = {}
 
     # Handle Namespace

@@ -85,12 +85,6 @@ from vllm.entrypoints.responses_utils import (
     construct_input_messages,
 )
 from vllm.entrypoints.serve.disagg.protocol import GenerateRequest, GenerateResponse
-from vllm.entrypoints.serve.tokenize.protocol import (
-    DetokenizeRequest,
-    TokenizeChatRequest,
-    TokenizeCompletionRequest,
-    TokenizeResponse,
-)
 from vllm.entrypoints.utils import _validate_truncation_size, sanitize_message
 from vllm.inputs.data import PromptType, TokensPrompt
 from vllm.inputs.parse import (
