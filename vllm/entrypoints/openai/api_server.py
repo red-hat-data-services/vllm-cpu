@@ -89,6 +89,7 @@ from vllm.entrypoints.utils import (
     log_non_default_args,
     process_chat_template,
     process_lora_modules,
+    sanitize_message,
     with_cancellation,
 )
 from vllm.logger import init_logger
@@ -539,14 +540,8 @@ async def create_completion(request: CompletionRequest, raw_request: Request):
 
     try:
         generator = await handler.create_completion(request, raw_request)
-    except OverflowError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.value, detail=str(e)
-        ) from e
     except Exception as e:
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail=str(e)
-        ) from e
+        return handler.create_error_response(e)
 
     if isinstance(generator, ErrorResponse):
         return JSONResponse(
@@ -992,7 +987,7 @@ def build_app(args: Namespace) -> FastAPI:
     async def http_exception_handler(_: Request, exc: HTTPException):
         err = ErrorResponse(
             error=ErrorInfo(
-                message=exc.detail,
+                message=sanitize_message(exc.detail),
                 type=HTTPStatus(exc.status_code).phrase,
                 code=exc.status_code,
             )
@@ -1011,7 +1006,7 @@ def build_app(args: Namespace) -> FastAPI:
 
         err = ErrorResponse(
             error=ErrorInfo(
-                message=message,
+                message=sanitize_message(message),
                 type=HTTPStatus.BAD_REQUEST.phrase,
                 code=HTTPStatus.BAD_REQUEST,
             )

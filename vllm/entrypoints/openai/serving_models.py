@@ -300,5 +300,9 @@ def create_error_response(
     status_code: HTTPStatus = HTTPStatus.BAD_REQUEST,
 ) -> ErrorResponse:
     return ErrorResponse(
-        error=ErrorInfo(message=message, type=err_type, code=status_code.value)
+        error=ErrorInfo(
+            message=re.sub(r" at 0x[0-9a-f]+>", ">", message),
+            type=err_type,
+            code=status_code.value,
+        )
     )

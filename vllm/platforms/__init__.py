@@ -165,9 +165,7 @@ def cpu_platform_plugin() -> str | None:
                 "Confirmed CPU platform is available because vLLM is built with CPU."
             )
         elif envs.VLLM_TARGET_DEVICE == "cpu":
-            logger.debug(
-                "Forcing CPU platform due to VLLM_TARGET_DEVICE env var."
-            )
+            logger.debug("Forcing CPU platform due to VLLM_TARGET_DEVICE env var.")
             is_cpu = True
         else:
             import sys
