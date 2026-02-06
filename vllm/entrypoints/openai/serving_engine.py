@@ -751,6 +751,7 @@ class OpenAIServing:
     ) -> ErrorResponse:
         exc: Exception | None = None
 
+        param = None
         if isinstance(message, Exception):
             exc = message
 
