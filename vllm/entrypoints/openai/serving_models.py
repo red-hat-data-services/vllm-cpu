@@ -296,10 +296,14 @@ class OpenAIServingModels:
 
 
 def create_error_response(
-        message: str,
-        err_type: str = "BadRequestError",
-        status_code: HTTPStatus = HTTPStatus.BAD_REQUEST) -> ErrorResponse:
-    return ErrorResponse(error=ErrorInfo(message=sanitize_message(message),
-                                         type=err_type,
-                                         code=status_code.value))
-
+    message: str,
+    err_type: str = "BadRequestError",
+    status_code: HTTPStatus = HTTPStatus.BAD_REQUEST,
+) -> ErrorResponse:
+    return ErrorResponse(
+        error=ErrorInfo(
+            message=re.sub(r" at 0x[0-9a-f]+>", ">", message),
+            type=err_type,
+            code=status_code.value,
+        )
+    )
