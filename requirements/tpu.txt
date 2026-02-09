@@ -10,4 +10,4 @@ jinja2>=3.1.6
 ray[default]
 ray[data]
 setuptools==78.1.1
-tpu-inference==0.13.2
+tpu-inference@git+https://github.com/vllm-project/tpu-inference@rc/v0.14.1
