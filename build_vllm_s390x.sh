@@ -16,7 +16,7 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 # install development packages
 rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 microdnf install -y \
-    which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
+    which procps findutils tar vim git gcc-toolset-14 gcc-toolset-14-libatomic-devel make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
     clang clang-devel  ninja-build perl-core libsodium libsodium-devel llvm15 llvm15-devel llvm15-static && \
@@ -29,6 +29,8 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     source "$CARGO_HOME/env" && \
     rustup default stable && \
     rustup show
+
+source /opt/rh/gcc-toolset-14/enable
 
 # -------------------------
 # Apache Arrow (C++ + Python)
@@ -57,6 +59,10 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       ..
 make -j"$(nproc)"
 make install
+
+export PYTHONPATH=$(pwd)/build/lib.linux-s390x-cpython-${PYTHON_VERSION/./}:$PYTHONPATH
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
 cd ../../python
 export PYARROW_PARALLEL=4
 export ARROW_BUILD_TYPE=release
