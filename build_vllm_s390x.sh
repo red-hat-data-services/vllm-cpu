@@ -60,7 +60,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
 make -j"$(nproc)"
 make install
 
-export PYTHONPATH=$(pwd)/build/lib.linux-s390x-cpython-${PYTHON_VERSION/./}:$PYTHONPATH
+export PYTHONPATH="$(pwd)/build/lib.linux-s390x-cpython-${PYTHON_VERSION/./}:${PYTHONPATH:-}"
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
 cd ../../python
