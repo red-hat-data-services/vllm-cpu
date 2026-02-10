@@ -16,7 +16,7 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 # install development packages
 rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 microdnf install -y \
-    which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
+    which procps findutils tar vim git gcc-toolset-14 gcc-toolset-14-binutils gcc-toolset-14-libatomic-devel  make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
     clang clang-devel  ninja-build perl-core libsodium libsodium-devel llvm15 llvm15-devel llvm15-static && \
@@ -24,6 +24,8 @@ microdnf install -y \
 
 pip install --no-cache -U pip wheel && \
 pip install --no-cache -U uv
+
+source /opt/rh/gcc-toolset-14/enable
 
 curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     source "$CARGO_HOME/env" && \
@@ -61,7 +63,9 @@ cd ../../python
 export PYARROW_PARALLEL=4
 export ARROW_BUILD_TYPE=release
 uv pip install -r requirements-build.txt
-python setup.py build_ext --build-type="$ARROW_BUILD_TYPE" --bundle-arrow-cpp bdist_wheel --dist-dir "${WHEEL_DIR}"
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+python setup.py build_ext --build-type=$ARROW_BUILD_TYPE --bundle-arrow-cpp --inplace
+python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
 
 # -------------------------
 # numactl
