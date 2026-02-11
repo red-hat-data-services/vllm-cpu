@@ -964,7 +964,7 @@ sentence-transformers==3.2.1
     #   mteb
 sentencepiece==0.2.0
     # via mistral-common
-setuptools==78.1.1
+setuptools>=77.0.3,<81.0.0
     # via
     #   lightning-utilities
     #   pytablewriter
