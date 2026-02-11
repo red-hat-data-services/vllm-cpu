@@ -170,6 +170,10 @@ install_numba
 # back to vLLM root
 cd ${CURDIR}
 
+# llvmlite==0.44.0 needs setuptools<70
+echo "setuptools<70.0.0" > build_constraints.txt
+uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
+
 uv pip install ${WHEEL_DIR}/*.whl
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
 # sentencepiece.pc is in some pkgconfig inside uv cache
