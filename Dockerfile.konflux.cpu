@@ -71,10 +71,11 @@ ENV VLLM_NO_USAGE_STATS=1
 
 # Set Environment Variables for venv & openblas
 ENV VIRTUAL_ENV=/opt/vllm
-ENV PATH=${VIRTUAL_ENV}/bin:$PATH:/usr/lib64/llvm15/bin
-ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
+ENV PCP_DIR=/opt/rh/gcc-toolset-14/root
+ENV PATH=${VIRTUAL_ENV}/bin:${PCP_DIR}/usr/bin:$PATH:/usr/lib64/llvm15/bin
+ENV PKG_CONFIG_PATH=${PCP_DIR}/usr/lib64/pkgconfig:/usr/local/lib/pkgconfig/
 ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
-ENV LD_LIBRARY_PATH=/opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib
+ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:/opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib
 ENV OMP_NUM_THREADS=16
 ENV UV_LINK_MODE=copy
 ARG VLLM_VERSION="0.10.1.1.6"
@@ -111,7 +112,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm; \
         microdnf install --nodocs -y \
             libomp tar findutils openssl llvm15 llvm15-devel \
-            pkgconfig xsimd g++ gcc-fortran libsndfile \
+            pkgconfig xsimd gcc-toolset-14 libsndfile \
             libtiff libjpeg openjpeg2 zlib zeromq \
             freetype lcms2 libwebp tcl tk utf8proc \
             harfbuzz fribidi libraqm libimagequant libxcb \
