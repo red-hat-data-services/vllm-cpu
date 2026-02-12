@@ -203,31 +203,6 @@ install_numba() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
-# TODO(): figure out exact llvmlite version needed by numba
-install_llvmlite() {
-    cd ${CURDIR}
-
-    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
-
-    TEMP_BUILD_DIR=$(mktemp -d)
-    cd ${TEMP_BUILD_DIR}
-
-    : ================== Installing Llvmlite ==================
-    git clone --recursive https://github.com/numba/llvmlite.git -b v${LLVMLITE_VERSION}
-    cd llvmlite
-    uv build --wheel --out-dir /llvmlitewheel
-
-
-    : ================= Fix LLvmlite Wheel ====================
-    cd /llvmlitewheel
-
-    auditwheel repair llvmlite*.whl
-    mv wheelhouse/llvmlite*.whl ${WHEEL_DIR}
-
-    cd ${CURDIR}
-    rm -rf ${TEMP_BUILD_DIR}
-}
-
 install_xgrammar() {
     cd ${CURDIR}
 
@@ -247,7 +222,6 @@ install_xgrammar() {
 
 install_torch_family
 install_pyarrow
-install_llvmlite
 install_numba
 install_pillow
 install_pyzmq
@@ -258,6 +232,10 @@ install_xgrammar
 # back to vLLM root
 cd ${CURDIR}
 source /opt/rh/gcc-toolset-14/enable
+
+# llvmlite==0.44.0 needs setuptools<70
+echo "setuptools<70.0.0" > build_constraints.txt
+uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
 
 uv pip install ${WHEEL_DIR}/*.whl
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
