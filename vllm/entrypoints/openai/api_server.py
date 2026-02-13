@@ -99,7 +99,8 @@ from vllm.entrypoints.openai.tool_parsers import ToolParserManager
 from vllm.entrypoints.tool_server import (DemoToolServer, MCPToolServer,
                                           ToolServer)
 from vllm.entrypoints.utils import (cli_env_setup, load_aware_call,
-                                    log_non_default_args, with_cancellation)
+                                    log_non_default_args, sanitize_message,
+                                    with_cancellation)
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParserManager
 from vllm.transformers_utils.config import (
@@ -710,12 +711,8 @@ async def create_completion(request: CompletionRequest, raw_request: Request):
 
     try:
         generator = await handler.create_completion(request, raw_request)
-    except OverflowError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value,
-                            detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
-                            detail=str(e)) from e
+        return handler.create_error_response(e)
 
     if isinstance(generator, ErrorResponse):
         return JSONResponse(content=generator.model_dump(),
@@ -1525,7 +1522,7 @@ def build_app(args: Namespace) -> FastAPI:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException):
         err = ErrorResponse(
-            error=ErrorInfo(message=exc.detail,
+            error=ErrorInfo(message=sanitize_message(exc.detail),
                             type=HTTPStatus(exc.status_code).phrase,
                             code=exc.status_code))
         return JSONResponse(err.model_dump(), status_code=exc.status_code)
@@ -1541,7 +1538,7 @@ def build_app(args: Namespace) -> FastAPI:
         else:
             message = exc_str
 
-        err = ErrorResponse(error=ErrorInfo(message=message,
+        err = ErrorResponse(error=ErrorInfo(message=sanitize_message(message),
                                             type=HTTPStatus.BAD_REQUEST.phrase,
                                             code=HTTPStatus.BAD_REQUEST))
         return JSONResponse(err.model_dump(),
