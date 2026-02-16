@@ -7,7 +7,7 @@ ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builder-base
 
-ARG VLLM_VERSION="0.13.0"
+ARG VLLM_VERSION="0.14.1"
 ARG PYTHON_VERSION=3.12
 ARG VLLM_TARGET_DEVICE=cpu
 
@@ -78,7 +78,7 @@ ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
 ENV OMP_NUM_THREADS=16
 ENV UV_LINK_MODE=copy
-ARG VLLM_VERSION="0.13.0"
+ARG VLLM_VERSION="0.14.1"
 
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
