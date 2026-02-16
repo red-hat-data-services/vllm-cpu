@@ -88,6 +88,23 @@ target "rocm" {
   ]
 }
 
+target "cpu" {
+  inherits = ["_common"]
+  dockerfile = "Dockerfile.cpu.ubi"
+
+  args = {
+    PYTHON_VERSION = "${PYTHON_VERSION}"
+  }
+
+  tags = [
+    "${REPOSITORY}:${replace(VLLM_VERSION, "+", "_")}", # vllm_version might contain local version specifiers (+) which are not valid tags
+    "${REPOSITORY}:cpu-${GITHUB_SHA}",
+    "${REPOSITORY}:cpu-${GITHUB_RUN_ID}",
+    RELEASE_IMAGE ? "quay.io/vllm/vllm-cpu:${replace(VLLM_VERSION, "+", "_")}" : "" # TODO: repository does not exist yet
+  ]
+
+}
+
 target "tpu" {
   inherits = ["_common"]
   dockerfile = "Dockerfile.tpu.ubi"
