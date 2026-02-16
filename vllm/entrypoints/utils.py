@@ -8,19 +8,24 @@ import functools
 import os
 import subprocess
 import sys
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
+import regex as re
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask, BackgroundTasks
 
 from vllm.engine.arg_utils import EngineArgs
-from vllm.entrypoints.openai.cli_args import make_arg_parser
-from vllm.entrypoints.openai.protocol import (ChatCompletionRequest,
-                                              CompletionRequest)
 from vllm.logger import init_logger
 from vllm.platforms import current_platform
 from vllm.utils import FlexibleArgumentParser
+
+if TYPE_CHECKING:
+    from vllm.entrypoints.openai.protocol import (ChatCompletionRequest,
+                                                  CompletionRequest)
+else:
+    ChatCompletionRequest = object
+    CompletionRequest = object
 
 logger = init_logger(__name__)
 
@@ -286,8 +291,8 @@ def show_filtered_argument_or_group_from_help(parser: argparse.ArgumentParser,
             sys.exit(1)
 
 
-def get_max_tokens(max_model_len: int, request: Union[ChatCompletionRequest,
-                                                      CompletionRequest],
+def get_max_tokens(max_model_len: int,
+                   request: "Union[ChatCompletionRequest, CompletionRequest]",
                    input_length: int, default_sampling_params: dict) -> int:
 
     max_tokens = getattr(request, "max_completion_tokens",
@@ -302,6 +307,8 @@ def get_max_tokens(max_model_len: int, request: Union[ChatCompletionRequest,
 
 
 def log_non_default_args(args: Union[argparse.Namespace, EngineArgs]):
+    from vllm.entrypoints.openai.cli_args import make_arg_parser
+
     non_default_args = {}
 
     # Handle argparse.Namespace
@@ -324,3 +331,8 @@ def log_non_default_args(args: Union[argparse.Namespace, EngineArgs]):
         "Must be argparse.Namespace or EngineArgs instance.")
 
     logger.info("non-default args: %s", non_default_args)
+
+
+def sanitize_message(message: str) -> str:
+    # Avoid leaking memory address from object reprs
+    return re.sub(r" at 0x[0-9a-f]+>", ">", message)
