@@ -232,6 +232,13 @@ uv pip install maturin
 python -m maturin build --release --out "${WHEEL_DIR}"
 
 # -------------------------
+# Build wheels for jinja2 and markupsafe for offline installation
+# -------------------------
+pip wheel "jinja2==3.1.6" "markupsafe>=2.0" \
+  --wheel-dir ${WHEEL_DIR} \
+  --no-deps
+
+# -------------------------
 # install all wheels we've built so far
 # -------------------------
 cd ${CURDIR}
@@ -243,6 +250,5 @@ rm -f ${WHEEL_DIR}/setuptools-8[12]*.whl ${WHEEL_DIR}/setuptools-7[0-6]*.whl || 
 uv pip install ${WHEEL_DIR}/*.whl
 
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
+uv pip install "jinja2==3.1.6" "markupsafe>=2.0"
 uv pip install -r requirements/cpu.txt -r requirements/cpu-build.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
-pip freeze > /tmp/frozen.txt
-pip wheel -r /tmp/frozen.txt -w ${WHEEL_DIR} --find-links ${WHEEL_DIR}
