@@ -36,8 +36,6 @@ spec:
     value: "3.3.0"
   - name: path-context
     value: .
-  - name: rhoai-version
-    value: "3.3.0"
   - name: hermetic
     value: false
   - name: build-source-image
