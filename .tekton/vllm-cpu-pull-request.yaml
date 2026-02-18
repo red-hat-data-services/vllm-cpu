@@ -32,6 +32,8 @@ spec:
     value: quay.io/rhoai/pull-request-pipelines:vllm-cpu-{{revision}}
   - name: dockerfile
     value: Dockerfile.konflux.cpu
+  - name: rhoai-version
+    value: "3.3.0"
   - name: path-context
     value: .
   - name: hermetic
