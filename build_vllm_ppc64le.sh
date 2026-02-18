@@ -183,6 +183,19 @@ install_pyarrow() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
+install_opencv() {
+
+export OPENCV_VERSION=92
+
+export ENABLE_HEADLESS=1
+git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
+    cd opencv-python && \
+    if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
+    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
+    #python -m build --wheel --installer=uv --outdir ${WHEEL_DIR}
+    uv build --wheel --out-dir ${WHEEL_DIR}
+}
+
 install_numba() {
     cd ${CURDIR}
     
@@ -226,6 +239,7 @@ install_numba
 install_pillow
 install_pyzmq
 install_xgrammar
+install_opencv
 
 #wait $(jobs -p)
 
