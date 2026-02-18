@@ -33,7 +33,6 @@ from vllm.transformers_utils.configs import (ChatGLMConfig, DeepseekVLV2Config,
                                              EAGLEConfig, JAISConfig,
                                              KimiVLConfig, MedusaConfig,
                                              MLPSpeculatorConfig,
-                                             Nemotron_Nano_VL_Config,
                                              NemotronConfig, OvisConfig,
                                              RWConfig, SpeculatorsConfig,
                                              Step3TextConfig, Step3VLConfig,
@@ -71,7 +70,6 @@ _CONFIG_REGISTRY: dict[str, type[PretrainedConfig]] = {
     "chatglm": ChatGLMConfig,
     "deepseek_vl_v2": DeepseekVLV2Config,
     "kimi_vl": KimiVLConfig,
-    "Llama_Nemotron_Nano_VL": Nemotron_Nano_VL_Config,
     "RefinedWeb": RWConfig,  # For tiiuae/falcon-40b(-instruct)
     "RefinedWebModel": RWConfig,  # For tiiuae/falcon-7b(-instruct)
     "jais": JAISConfig,
@@ -98,6 +96,9 @@ _AUTO_CONFIG_KWARGS_OVERRIDES: dict[str, dict[str, Any]] = {
     # vllm needs is_encoder_decoder=True to enable cross-attention
     "mllama": {
         "is_encoder_decoder": True
+    },
+    "Llama_Nemotron_Nano_VL": {
+        "attn_implementation": "eager"
     },
     "NVLM_D": {
         "has_no_defaults_at_init": True

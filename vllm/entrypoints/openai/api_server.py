@@ -4,12 +4,14 @@
 import asyncio
 import atexit
 import gc
+import hashlib
 import importlib
 import inspect
 import json
 import multiprocessing
 import multiprocessing.forkserver as forkserver
 import os
+import secrets
 import signal
 import socket
 import tempfile
@@ -97,7 +99,8 @@ from vllm.entrypoints.openai.tool_parsers import ToolParserManager
 from vllm.entrypoints.tool_server import (DemoToolServer, MCPToolServer,
                                           ToolServer)
 from vllm.entrypoints.utils import (cli_env_setup, load_aware_call,
-                                    log_non_default_args, with_cancellation)
+                                    log_non_default_args, sanitize_message,
+                                    with_cancellation)
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParserManager
 from vllm.transformers_utils.config import (
@@ -708,12 +711,8 @@ async def create_completion(request: CompletionRequest, raw_request: Request):
 
     try:
         generator = await handler.create_completion(request, raw_request)
-    except OverflowError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value,
-                            detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
-                            detail=str(e)) from e
+        return handler.create_error_response(e)
 
     if isinstance(generator, ErrorResponse):
         return JSONResponse(content=generator.model_dump(),
@@ -1245,7 +1244,7 @@ def load_log_config(log_config_file: Optional[str]) -> Optional[dict]:
 class AuthenticationMiddleware:
     """
     Pure ASGI middleware that authenticates each request by checking
-    if the Authorization header exists and equals "Bearer {api_key}".
+    if the Authorization Bearer token exists and equals anyof "{api_key}".
 
     Notes
     -----
@@ -1256,7 +1255,26 @@ class AuthenticationMiddleware:
 
     def __init__(self, app: ASGIApp, tokens: list[str]) -> None:
         self.app = app
-        self.api_tokens = {f"Bearer {token}" for token in tokens}
+        self.api_tokens = [
+            hashlib.sha256(t.encode("utf-8")).digest() for t in tokens
+        ]
+
+    def verify_token(self, headers: Headers) -> bool:
+        authorization_header_value = headers.get("Authorization")
+        if not authorization_header_value:
+            return False
+
+        scheme, _, param = authorization_header_value.partition(" ")
+        if scheme.lower() != "bearer":
+            return False
+
+        param_hash = hashlib.sha256(param.encode("utf-8")).digest()
+
+        token_match = False
+        for token_hash in self.api_tokens:
+            token_match |= secrets.compare_digest(param_hash, token_hash)
+
+        return token_match
 
     def __call__(self, scope: Scope, receive: Receive,
                  send: Send) -> Awaitable[None]:
@@ -1269,8 +1287,7 @@ class AuthenticationMiddleware:
         url_path = URL(scope=scope).path.removeprefix(root_path)
         headers = Headers(scope=scope)
         # Type narrow to satisfy mypy.
-        if url_path.startswith("/v1") and headers.get(
-                "Authorization") not in self.api_tokens:
+        if url_path.startswith("/v1") and not self.verify_token(headers):
             response = JSONResponse(content={"error": "Unauthorized"},
                                     status_code=401)
             return response(scope, receive, send)
@@ -1505,7 +1522,7 @@ def build_app(args: Namespace) -> FastAPI:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException):
         err = ErrorResponse(
-            error=ErrorInfo(message=exc.detail,
+            error=ErrorInfo(message=sanitize_message(exc.detail),
                             type=HTTPStatus(exc.status_code).phrase,
                             code=exc.status_code))
         return JSONResponse(err.model_dump(), status_code=exc.status_code)
@@ -1521,7 +1538,7 @@ def build_app(args: Namespace) -> FastAPI:
         else:
             message = exc_str
 
-        err = ErrorResponse(error=ErrorInfo(message=message,
+        err = ErrorResponse(error=ErrorInfo(message=sanitize_message(message),
                                             type=HTTPStatus.BAD_REQUEST.phrase,
                                             code=HTTPStatus.BAD_REQUEST))
         return JSONResponse(err.model_dump(),
