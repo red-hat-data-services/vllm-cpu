@@ -119,6 +119,8 @@ cd ${CURDIR}
 git clone https://github.com/huggingface/xet-core.git
 cd xet-core/hf_xet/
 uv pip install maturin patchelf
+# Remove the python-source setting from pyproject.toml as it points to a non-existent path
+sed -i '/python-source/d' pyproject.toml
 python -m maturin build --release --out "${WHEEL_DIR}"
 
 # -------------------------
