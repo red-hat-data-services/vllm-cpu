@@ -122,6 +122,17 @@ uv pip install maturin patchelf
 python -m maturin build --release --out "${WHEEL_DIR}"
 
 # -------------------------
+# opencv-python-headless
+# -------------------------
+cd ${CURDIR}
+export OPENCV_VERSION=92
+export ENABLE_HEADLESS=1
+uv pip install numpy setuptools  wheel scikit_build build
+git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION}
+cd opencv-python
+uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+
+# -------------------------
 # numba & llvmlite
 # -------------------------
 export MAX_JOBS=${MAX_JOBS:-"$(nproc)"}
