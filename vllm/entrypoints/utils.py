@@ -5,7 +5,7 @@ import asyncio
 import dataclasses
 import functools
 import os
-from argparse import Namespace
+from argparse import Namespace, ArgumentParser
 from pathlib import Path
 from typing import Any
 import subprocess
@@ -25,13 +25,11 @@ from vllm.entrypoints.chat_utils import (
     resolve_hf_chat_template,
     resolve_mistral_chat_template,
 )
-from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     CompletionRequest,
     StreamOptions,
 )
-from vllm.entrypoints.openai.serving_models import LoRAModulePath
 from vllm.logger import init_logger
 from vllm.platforms import current_platform
 from vllm.tokenizers.mistral import MistralTokenizer
@@ -40,9 +38,11 @@ from vllm.utils.argparse_utils import FlexibleArgumentParser
 if TYPE_CHECKING:
     from vllm.entrypoints.openai.protocol import (ChatCompletionRequest,
                                                   CompletionRequest)
+    from vllm.entrypoints.openai.serving_models import LoRAModulePath
 else:
     ChatCompletionRequest = object
     CompletionRequest = object
+    LoRAModulePath = object
 
 logger = init_logger(__name__)
 
@@ -253,7 +253,7 @@ def _output_with_pager(text: str):
     print(text)
 
 
-def show_filtered_argument_or_group_from_help(parser: argparse.ArgumentParser,
+def show_filtered_argument_or_group_from_help(parser: ArgumentParser,
                                               subcommand_name: list[str]):
 
     # Only handle --help=<keyword> for the current subcommand.
@@ -327,7 +327,7 @@ def show_filtered_argument_or_group_from_help(parser: argparse.ArgumentParser,
 
 def log_non_default_args(args: Namespace | EngineArgs):
     non_default_args = {}
-
+    from vllm.entrypoints.openai.cli_args import make_arg_parser
     # Handle Namespace
     if isinstance(args, Namespace):
         parser = make_arg_parser(FlexibleArgumentParser())

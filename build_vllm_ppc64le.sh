@@ -203,6 +203,31 @@ install_numba() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
+# TODO(): figure out exact llvmlite version needed by numba
+install_llvmlite() {
+    cd ${CURDIR}
+
+    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Llvmlite ==================
+    git clone --recursive https://github.com/numba/llvmlite.git -b v${LLVMLITE_VERSION}
+    cd llvmlite
+    echo "setuptools<70.0.0" > build_constraints.txt
+    uv build --wheel --out-dir /llvmlitewheel --build-constraint build_constraints.txt
+
+    : ================= Fix LLvmlite Wheel ====================
+    cd /llvmlitewheel
+
+    auditwheel repair llvmlite*.whl
+    mv wheelhouse/llvmlite*.whl ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR}
+}
+
 install_xgrammar() {
     cd ${CURDIR}
 
@@ -235,6 +260,7 @@ git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VE
 
 install_torch_family
 install_pyarrow
+install_llvmlite
 install_numba
 install_pillow
 install_pyzmq
