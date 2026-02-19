@@ -9,7 +9,7 @@ wheel
 jinja2>=3.1.6
 ray[default]
 ray[data]
-setuptools==78.1.0
+setuptools>=77.0.3,<81.0.0
 nixl==0.3.0
 
 # Install torch_xla

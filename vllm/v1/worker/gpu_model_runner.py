@@ -1485,7 +1485,7 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
         for raw_output, seq_len, prompt_len in zip(
                 raw_pooler_output, seq_lens, pooling_metadata.prompt_lens):
 
-            output = raw_output.data if seq_len == prompt_len else None
+            output = raw_output.data.cpu() if seq_len == prompt_len else None
             pooler_output.append(output)
 
         return ModelRunnerOutput(

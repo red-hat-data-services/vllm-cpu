@@ -110,13 +110,6 @@ RUN --mount=type=bind,from=build_amdsmi,src=/dist,target=/install/amdsmi/ \
     --mount=type=bind,src=payload,target=/workspace/payload \
     ./payload/run.sh
 
-# temporary workaround until https://github.com/openai/tiktoken/pull/446 is merged
-COPY make-blobfile-optional-in-tiktoken.patch /tmp/
-RUN microdnf install -y patch && \
-    patch -p 1 "$VIRTUAL_ENV/lib/python3.12/site-packages/tiktoken/load.py" /tmp/make-blobfile-optional-in-tiktoken.patch && \
-    microdnf remove -y patch && \
-    microdnf clean all
-
 ENV HF_HUB_OFFLINE=1 \
     HOME=/home/vllm \
     VLLM_USAGE_STATS_SERVER=https://console.redhat.com/api/rhaiis-stats \
