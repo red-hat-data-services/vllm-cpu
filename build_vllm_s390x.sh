@@ -70,7 +70,10 @@ cd ../../python
 export PYARROW_PARALLEL=4
 export ARROW_BUILD_TYPE=release
 uv pip install -r requirements-build.txt
-python setup.py build_ext --build-type="$ARROW_BUILD_TYPE" --bundle-arrow-cpp bdist_wheel --dist-dir "${WHEEL_DIR}"
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+python setup.py build_ext --build-type=$ARROW_BUILD_TYPE --bundle-arrow-cpp --inplace
+python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
+
 
 # -------------------------
 # numactl
@@ -86,31 +89,24 @@ make
 make install
 export C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 
-# -------------------------
-# PyTorch
-# -------------------------
-export TORCH_VERSION=2.8.0
-export _GLIBCXX_USE_CXX11_ABI=1
-export CARGO_HOME=/root/.cargo
-export RUSTUP_HOME=/root/.rustup
-export PATH="$CARGO_HOME/bin:$RUSTUP_HOME/bin:$PATH"
-cd ${CURDIR}
-git clone https://github.com/pytorch/pytorch.git
-cd pytorch
-git checkout v${TORCH_VERSION}
-git submodule sync
-git submodule update --init --recursive
-uv pip install cmake ninja
-uv pip install -r requirements.txt
-PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
-uv pip install ${WHEEL_DIR}/torch-${TORCH_VERSION}*.whl
+# Download torch and setuptools (with correct version constraints for vllm)
+pip download torch==2.10.0+cpu \
+  --index-url https://download.pytorch.org/whl/cpu \
+  --extra-index-url https://pypi.org/simple \
+  -d ${WHEEL_DIR}
+
+# Download setuptools==77.0.3 specifically for vllm
+pip download "setuptools==77.0.3" \
+  --extra-index-url https://pypi.org/simple \
+  -d ${WHEEL_DIR}
 
 # -------------------------
 # TorchVision
 # -------------------------
 export TORCH_VISION_VERSION=v0.20.1
 cd ${CURDIR}
-uv pip install cmake ninja wheel setuptools
+uv pip install cmake ninja wheel "setuptools>=77.0.3,<81.0.0"
+uv pip install torch==2.10.0+cpu --index-url https://download.pytorch.org/whl/cpu
 git clone https://github.com/pytorch/vision.git
 cd vision
 git checkout $TORCH_VISION_VERSION
@@ -124,6 +120,7 @@ cd ${CURDIR}
 git clone https://github.com/huggingface/xet-core.git
 cd xet-core/hf_xet/
 uv pip install maturin patchelf
+sed -i '/python-source/d' pyproject.toml
 python -m maturin build --release --out "${WHEEL_DIR}"
 
 # -------------------------
@@ -146,7 +143,7 @@ CXXFLAGS="$(echo ${CXXFLAGS:-} | sed 's/-fno-plt //g')"
 CMAKE_ARGS="${CMAKE_ARGS} -DFFI_INCLUDE_DIR=$PREFIX/include"
 CMAKE_ARGS="${CMAKE_ARGS} -DFFI_LIBRARY_DIR=$PREFIX/lib"
 
-cmake -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+/usr/bin/cmake -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_LIBRARY_PATH="${PREFIX}" \
     -DLLVM_ENABLE_LIBEDIT=OFF \
@@ -235,15 +232,35 @@ uv pip install maturin
 python -m maturin build --release --out "${WHEEL_DIR}"
 
 # -------------------------
+# Build wheel for OpenCV-Headless
+# -------------------------
+cd ${CURDIR}
+export MAX_JOBS=${MAX_JOBS:-"$(nproc)"}
+export OPENCV_VERSION=92
+export ENABLE_HEADLESS=1
+uv pip install numpy setuptools wheel scikit_build build
+git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION}
+cd opencv-python
+python -m build --wheel --installer=uv --outdir "${WHEEL_DIR}"
+
+# -------------------------
+# Build wheels for jinja2 and markupsafe for offline installation
+# -------------------------
+pip wheel "jinja2==3.1.6" "markupsafe>=2.0" \
+  --wheel-dir ${WHEEL_DIR} \
+  --no-deps
+
+# -------------------------
 # install all wheels we've built so far
 # -------------------------
 cd ${CURDIR}
 
 mkdir -p lapack
 mkdir -p OpenBLAS
+rm -f ${WHEEL_DIR}/setuptools-8[12]*.whl ${WHEEL_DIR}/setuptools-7[0-6]*.whl || true
 
 uv pip install ${WHEEL_DIR}/*.whl
 
-sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
-uv pip install -r requirements/common.txt -r requirements/cpu.txt -r requirements/build.txt --index-strategy unsafe-best-match
+uv pip install "jinja2==3.1.6" "markupsafe>=2.0"
+uv pip install -r requirements/cpu.txt -r requirements/cpu-build.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
