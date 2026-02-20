@@ -183,6 +183,19 @@ install_pyarrow() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
+install_opencv() {
+
+export OPENCV_VERSION=92
+
+export ENABLE_HEADLESS=1
+git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
+    cd opencv-python && \
+    if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
+    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
+    #python -m build --wheel --installer=uv --outdir ${WHEEL_DIR}
+    uv build --wheel --out-dir ${WHEEL_DIR}
+}
+
 install_numba() {
     cd ${CURDIR}
     
@@ -215,8 +228,8 @@ install_llvmlite() {
     : ================== Installing Llvmlite ==================
     git clone --recursive https://github.com/numba/llvmlite.git -b v${LLVMLITE_VERSION}
     cd llvmlite
-    uv build --wheel --out-dir /llvmlitewheel
-
+    echo "setuptools<70.0.0" > build_constraints.txt
+    uv build --wheel --out-dir /llvmlitewheel --build-constraint build_constraints.txt
 
     : ================= Fix LLvmlite Wheel ====================
     cd /llvmlitewheel
@@ -252,12 +265,17 @@ install_numba
 install_pillow
 install_pyzmq
 install_xgrammar
+install_opencv
 
 #wait $(jobs -p)
 
 # back to vLLM root
 cd ${CURDIR}
 source /opt/rh/gcc-toolset-14/enable
+
+# llvmlite==0.44.0 needs setuptools<70
+echo "setuptools<70.0.0" > build_constraints.txt
+uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
 
 uv pip install ${WHEEL_DIR}/*.whl
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt

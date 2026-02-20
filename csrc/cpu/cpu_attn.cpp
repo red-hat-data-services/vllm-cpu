@@ -15,6 +15,7 @@
 
 #ifdef __aarch64__
   #include "cpu_attn_neon.hpp"
+  // NEON requires head_dim to be a multiple of 32
   #define NEON_DISPATCH(...)                                                   \
     case cpu_attention::ISA::NEON: {                                           \
       using attn_impl = cpu_attention::AttentionImpl<cpu_attention::ISA::NEON, \
