@@ -89,8 +89,10 @@ from vllm.entrypoints.utils import (
     log_non_default_args,
     process_chat_template,
     process_lora_modules,
+    sanitize_message,
     with_cancellation,
 )
+from vllm.entrypoints.openai.tool_parsers import ToolParserManager
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParserManager
 from vllm.tasks import POOLING_TASKS
@@ -539,14 +541,8 @@ async def create_completion(request: CompletionRequest, raw_request: Request):
 
     try:
         generator = await handler.create_completion(request, raw_request)
-    except OverflowError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.value, detail=str(e)
-        ) from e
     except Exception as e:
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail=str(e)
-        ) from e
+        return handler.create_error_response(e)
 
     if isinstance(generator, ErrorResponse):
         return JSONResponse(
@@ -991,12 +987,9 @@ def build_app(args: Namespace) -> FastAPI:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException):
         err = ErrorResponse(
-            error=ErrorInfo(
-                message=exc.detail,
-                type=HTTPStatus(exc.status_code).phrase,
-                code=exc.status_code,
-            )
-        )
+            error=ErrorInfo(message=sanitize_message(exc.detail),
+                            type=HTTPStatus(exc.status_code).phrase,
+                            code=exc.status_code))
         return JSONResponse(err.model_dump(), status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
@@ -1009,14 +1002,11 @@ def build_app(args: Namespace) -> FastAPI:
         else:
             message = exc_str
 
-        err = ErrorResponse(
-            error=ErrorInfo(
-                message=message,
-                type=HTTPStatus.BAD_REQUEST.phrase,
-                code=HTTPStatus.BAD_REQUEST,
-            )
-        )
-        return JSONResponse(err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
+        err = ErrorResponse(error=ErrorInfo(message=sanitize_message(message),
+                                            type=HTTPStatus.BAD_REQUEST.phrase,
+                                            code=HTTPStatus.BAD_REQUEST))
+        return JSONResponse(err.model_dump(),
+                            status_code=HTTPStatus.BAD_REQUEST)
 
     # Ensure --api-key option from CLI takes precedence over VLLM_API_KEY
     if tokens := [key for key in (args.api_key or [envs.VLLM_API_KEY]) if key]:

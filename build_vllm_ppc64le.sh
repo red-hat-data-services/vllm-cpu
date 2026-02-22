@@ -203,6 +203,31 @@ install_numba() {
     rm -rf ${TEMP_BUILD_DIR}
 }
 
+# TODO(): figure out exact llvmlite version needed by numba
+install_llvmlite() {
+    cd ${CURDIR}
+
+    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Llvmlite ==================
+    git clone --recursive https://github.com/numba/llvmlite.git -b v${LLVMLITE_VERSION}
+    cd llvmlite
+    echo "setuptools<70.0.0" > build_constraints.txt
+    uv build --wheel --out-dir /llvmlitewheel --build-constraint build_constraints.txt
+
+    : ================= Fix LLvmlite Wheel ====================
+    cd /llvmlitewheel
+
+    auditwheel repair llvmlite*.whl
+    mv wheelhouse/llvmlite*.whl ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR}
+}
+
 install_xgrammar() {
     cd ${CURDIR}
 
@@ -220,12 +245,27 @@ install_xgrammar() {
     microdnf remove gcc-toolset-13 -y
 }
 
+install_opencv() {
+
+export OPENCV_VERSION=92
+
+export ENABLE_HEADLESS=1
+git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
+    cd opencv-python && \
+    if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
+    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
+    #python -m build --wheel --installer=uv --outdir ${WHEEL_DIR}
+    uv build --wheel --out-dir ${WHEEL_DIR}
+}
+
 install_torch_family
 install_pyarrow
+install_llvmlite
 install_numba
 install_pillow
 install_pyzmq
 install_xgrammar
+install_opencv
 
 #wait $(jobs -p)
 

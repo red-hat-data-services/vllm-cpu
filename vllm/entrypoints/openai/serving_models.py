@@ -21,6 +21,7 @@ from vllm.lora.request import LoRARequest
 from vllm.lora.resolver import LoRAResolver, LoRAResolverRegistry
 from vllm.utils.counter import AtomicCounter
 
+from vllm.entrypoints.utils import sanitize_message
 logger = init_logger(__name__)
 
 
@@ -295,10 +296,10 @@ class OpenAIServingModels:
 
 
 def create_error_response(
-    message: str,
-    err_type: str = "BadRequestError",
-    status_code: HTTPStatus = HTTPStatus.BAD_REQUEST,
-) -> ErrorResponse:
-    return ErrorResponse(
-        error=ErrorInfo(message=message, type=err_type, code=status_code.value)
-    )
+        message: str,
+        err_type: str = "BadRequestError",
+        status_code: HTTPStatus = HTTPStatus.BAD_REQUEST) -> ErrorResponse:
+    return ErrorResponse(error=ErrorInfo(message=sanitize_message(message),
+                                         type=err_type,
+                                         code=status_code.value))
+

@@ -92,6 +92,7 @@ from vllm.inputs.parse import (
     get_prompt_components,
     is_explicit_encoder_decoder_prompt,
 )
+from vllm.entrypoints.utils import sanitize_message
 from vllm.logger import init_logger
 from vllm.logprobs import Logprob, PromptLogprobs
 from vllm.lora.request import LoRARequest
@@ -740,21 +741,58 @@ class OpenAIServing:
         except Exception as e:
             return self.create_error_response(str(e))
 
-    def create_error_response(
-        self,
-        message: str,
-        err_type: str = "BadRequestError",
-        status_code: HTTPStatus = HTTPStatus.BAD_REQUEST,
-    ) -> ErrorResponse:
-        if self.log_error_stack:
-            exc_type, _, _ = sys.exc_info()
-            if exc_type is not None:
-                traceback.print_exc()
+    def create_error_response(self,
+                              message: str | Exception,
+                              err_type: str = "BadRequestError",
+                              status_code: HTTPStatus = HTTPStatus.BAD_REQUEST,
+                              param: str | None = None) -> ErrorResponse:
+        exc: Optional[Exception] = None
+
+        if isinstance(message, Exception):
+            exc = message
+
+            from vllm.exceptions import VLLMValidationError
+
+            if isinstance(exc, VLLMValidationError):
+                err_type = "BadRequestError"
+                status_code = HTTPStatus.BAD_REQUEST
+                param = exc.parameter
+            elif isinstance(
+                    exc, (ValueError, TypeError, RuntimeError, OverflowError)):
+                # Common validation errors from user input
+                err_type = "BadRequestError"
+                status_code = HTTPStatus.BAD_REQUEST
+                param = None
+            elif isinstance(exc, NotImplementedError):
+                err_type = "NotImplementedError"
+                status_code = HTTPStatus.NOT_IMPLEMENTED
+                param = None
+            elif exc.__class__.__name__ == "TemplateError":
+                # jinja2.TemplateError (avoid importing jinja2)
+                err_type = "BadRequestError"
+                status_code = HTTPStatus.BAD_REQUEST
+                param = None
             else:
-                traceback.print_stack()
-        return ErrorResponse(
-            error=ErrorInfo(message=message, type=err_type, code=status_code.value)
-        )
+                err_type = "InternalServerError"
+                status_code = HTTPStatus.INTERNAL_SERVER_ERROR
+                param = None
+
+            message = str(exc)
+
+        import sys
+        import traceback
+        exc_type, _, _ = sys.exc_info()
+        if exc_type is not None:
+            traceback.print_exc()
+        else:
+            traceback.print_stack()
+
+        return ErrorResponse(error=ErrorInfo(
+            message=sanitize_message(message),
+            type=err_type,
+            code=status_code.value,
+            param=param,
+        ))
 
     def create_streaming_error_response(
         self,
