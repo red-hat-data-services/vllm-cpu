@@ -1197,6 +1197,8 @@ class OpenAIServingChat(OpenAIServing):
                                 delta_message, output
                             )
                             and tool_parser
+                            and index < len(tool_parser.prev_tool_call_arr)
+                            and index < len(tool_parser.streamed_args_for_tool)
                         ):
                             latest_delta_len = 0
                             if (
@@ -1221,10 +1223,15 @@ class OpenAIServingChat(OpenAIServing):
                             )
 
                             # get what we've streamed so far for arguments
-                            # for the current tool
-                            actual_call = tool_parser.streamed_args_for_tool[index]
-                            if latest_delta_len > 0:
-                                actual_call = actual_call[:-latest_delta_len]
+                            # for the current tool. Some tool parsers
+                            # (e.g. Mistral) manage their own streaming
+                            # state and may not populate
+                            # streamed_args_for_tool, so we guard against
+                            # IndexError here.
+                            if index < len(tool_parser.streamed_args_for_tool):
+                                actual_call = tool_parser.streamed_args_for_tool[index]
+                                if latest_delta_len > 0:
+                                    actual_call = actual_call[:-latest_delta_len]
 
                             # check to see if there's anything left to stream
                             remaining_call = expected_call.replace(actual_call, "", 1)
