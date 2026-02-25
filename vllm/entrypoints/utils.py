@@ -22,18 +22,14 @@ from vllm.entrypoints.chat_utils import (
     resolve_hf_chat_template,
     resolve_mistral_chat_template,
 )
-from vllm.entrypoints.openai.cli_args import make_arg_parser
-from vllm.entrypoints.openai.serving_models import LoRAModulePath
 from vllm.logger import init_logger
 from vllm.platforms import current_platform
 from vllm.tokenizers.mistral import MistralTokenizer
 from vllm.utils.argparse_utils import FlexibleArgumentParser
 
 if TYPE_CHECKING:
-    from vllm.entrypoints.openai.chat_completion.protocol import (
+    from vllm.entrypoints.openai.protocol import (
         ChatCompletionRequest,
-    )
-    from vllm.entrypoints.openai.engine.protocol import (
         CompletionRequest,
         StreamOptions,
     )
@@ -238,6 +234,8 @@ def get_max_tokens(
 
 
 def log_non_default_args(args: Namespace | EngineArgs):
+    from vllm.entrypoints.openai.cli_args import make_arg_parser
+
     non_default_args = {}
 
     # Handle Namespace
