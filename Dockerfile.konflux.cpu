@@ -39,7 +39,7 @@ COPY  build_vllm_*.sh ./
 # this script would build & install all necessary packages from source
 # in the current vurtual environment
 RUN --mount=type=cache,target=/root/.cache/uv \
-    ./build_vllm_$(uname -m).sh
+    sh ./build_vllm_$(uname -m).sh
 
 # copy vllm source code to build cache
 COPY . .
