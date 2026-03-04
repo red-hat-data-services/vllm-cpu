@@ -28,7 +28,6 @@ from vllm.engine.protocol import EngineClient
 from vllm.entrypoints.chat_utils import load_chat_template
 from vllm.entrypoints.launcher import serve_http
 from vllm.entrypoints.logger import RequestLogger
-<<<<<<< HEAD
 from vllm.entrypoints.openai.cli_args import make_arg_parser, validate_parsed_serve_args
 from vllm.entrypoints.openai.engine.protocol import GenerationError
 from vllm.entrypoints.openai.models.protocol import BaseModelPath
@@ -55,57 +54,6 @@ from vllm.entrypoints.utils import (
     log_version_and_model,
     process_lora_modules,
 )
-=======
-from vllm.entrypoints.openai.cli_args import (log_non_default_args,
-                                              make_arg_parser,
-                                              validate_parsed_serve_args)
-# yapf conflicts with isort for this block
-# yapf: disable
-from vllm.entrypoints.openai.protocol import (ChatCompletionRequest,
-                                              ChatCompletionResponse,
-                                              ClassificationRequest,
-                                              ClassificationResponse,
-                                              CompletionRequest,
-                                              CompletionResponse,
-                                              DetokenizeRequest,
-                                              DetokenizeResponse,
-                                              EmbeddingChatRequest,
-                                              EmbeddingCompletionRequest,
-                                              EmbeddingRequest,
-                                              EmbeddingResponse, ErrorResponse,
-                                              LoadLoRAAdapterRequest,
-                                              PoolingChatRequest,
-                                              PoolingCompletionRequest,
-                                              PoolingRequest, PoolingResponse,
-                                              RerankRequest, RerankResponse,
-                                              ScoreRequest, ScoreResponse,
-                                              TokenizeRequest,
-                                              TokenizeResponse,
-                                              TranscriptionRequest,
-                                              TranscriptionResponse,
-                                              TranslationRequest,
-                                              TranslationResponse,
-                                              UnloadLoRAAdapterRequest)
-# yapf: enable
-from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
-from vllm.entrypoints.openai.serving_classification import (
-    ServingClassification)
-from vllm.entrypoints.openai.serving_completion import OpenAIServingCompletion
-from vllm.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
-from vllm.entrypoints.openai.serving_engine import OpenAIServing
-from vllm.entrypoints.openai.serving_models import (BaseModelPath,
-                                                    LoRAModulePath,
-                                                    OpenAIServingModels)
-from vllm.entrypoints.openai.serving_pooling import OpenAIServingPooling
-from vllm.entrypoints.openai.serving_score import ServingScores
-from vllm.entrypoints.openai.serving_tokenization import (
-    OpenAIServingTokenization)
-from vllm.entrypoints.openai.serving_transcription import (
-    OpenAIServingTranscription, OpenAIServingTranslation)
-from vllm.entrypoints.openai.tool_parsers import ToolParserManager
-from vllm.entrypoints.utils import (cli_env_setup, load_aware_call,
-                                    with_cancellation)
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParserManager
 from vllm.tasks import POOLING_TASKS, SupportedTask
@@ -426,10 +374,6 @@ async def init_app_state(
         engine_client=engine_client,
         base_model_paths=base_model_paths,
         lora_modules=lora_modules,
-<<<<<<< HEAD
-=======
-        prompt_adapters=args.prompt_adapters,
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
     )
     await state.openai_serving_models.init_static_loras()
 

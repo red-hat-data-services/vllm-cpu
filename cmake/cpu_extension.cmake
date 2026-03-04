@@ -290,15 +290,6 @@ if (ENABLE_X86_ISA OR (ASIMD_FOUND AND NOT APPLE_SILICON_FOUND) OR POWER9_FOUND 
     set(VLLM_BUILD_TYPE ${CMAKE_BUILD_TYPE})
     set(CMAKE_BUILD_TYPE "Release") # remove oneDNN debug symbols to reduce size
     FetchContent_MakeAvailable(oneDNN)
-<<<<<<< HEAD
-    set(CMAKE_BUILD_TYPE ${VLLM_BUILD_TYPE})
-    add_library(dnnl_ext OBJECT "csrc/cpu/dnnl_helper.cpp")
-    target_include_directories(
-        dnnl_ext
-        PUBLIC ${oneDNN_SOURCE_DIR}/include
-        PUBLIC ${oneDNN_BINARY_DIR}/include
-        PRIVATE ${oneDNN_SOURCE_DIR}/src
-=======
     
     list(APPEND LIBS dnnl)
 elseif(POWER10_FOUND OR POWER9_FOUND)
@@ -308,7 +299,6 @@ elseif(POWER10_FOUND OR POWER9_FOUND)
         GIT_TAG v3.7.2
         GIT_PROGRESS TRUE
         GIT_SHALLOW TRUE
->>>>>>> 190f0fe19 (Fixed undefined symbol errors when vllm is built on Power9)
     )
     target_link_libraries(dnnl_ext dnnl torch)
     target_compile_options(dnnl_ext PRIVATE ${DNNL_COMPILE_FLAGS} -fPIC)
@@ -364,8 +354,6 @@ if (ASIMD_FOUND AND NOT APPLE_SILICON_FOUND)
     set(VLLM_EXT_SRC
         "csrc/cpu/shm.cpp"
         ${VLLM_EXT_SRC})
-<<<<<<< HEAD
-=======
     if (ENABLE_AVX512BF16 AND ENABLE_AVX512VNNI)
         set(VLLM_EXT_SRC
             "csrc/cpu/sgl-kernels/gemm.cpp"
@@ -381,7 +369,6 @@ elseif(POWER10_FOUND OR POWER9_FOUND)
     set(VLLM_EXT_SRC
         "csrc/cpu/quant.cpp"
         ${VLLM_EXT_SRC})
->>>>>>> 190f0fe19 (Fixed undefined symbol errors when vllm is built on Power9)
 endif()
 
 if(USE_ONEDNN)

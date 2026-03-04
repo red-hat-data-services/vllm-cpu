@@ -5,22 +5,15 @@ Tests for applying default registered multimodal loras.
 """
 
 import os
-<<<<<<< HEAD
 import unittest.mock as mock
 
 import pytest
-=======
-
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 from huggingface_hub import snapshot_download
 
 from vllm.lora.request import LoRARequest
 
 from ..conftest import AudioTestAssets, VllmRunner
-<<<<<<< HEAD
 from ..utils import create_new_process_for_each_test
-=======
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 
 MODEL_PATH = snapshot_download("microsoft/Phi-4-multimodal-instruct")
 AUDIO_LORA_PATH = os.path.join(MODEL_PATH, "speech-lora")
@@ -40,28 +33,15 @@ VLLM_RUNNER_BASE_KWARGS = {
     "enable_lora": "True",
     "max_num_seqs": 2,
     "max_lora_rank": 320,
-<<<<<<< HEAD
     # Keep these LoRA tests on short-RoPE for determinism post-LongRoPE change.
     "max_model_len": 4096,
     "gpu_memory_utilization": 0.8,
     "limit_mm_per_prompt": {"audio": 1},
-=======
-    "max_model_len": 12800,
-    "gpu_memory_utilization": 0.8,
-    "limit_mm_per_prompt": {
-        "audio": 1
-    },
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
     "enforce_eager": True,
 }
 
 
-<<<<<<< HEAD
 def run_test(vllm_runner, audio_assets, lora_request, expected_suffix, **kwargs):
-=======
-def run_test(vllm_runner, audio_assets, lora_request, expected_suffix,
-             **kwargs):
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
     inputs = [([AUDIO_PROMPT], [audio_assets[0].audio_and_sample_rate[0]])]
 
     # Apply any additional kwargs as overrides to the base kwargs
@@ -74,7 +54,6 @@ def run_test(vllm_runner, audio_assets, lora_request, expected_suffix,
                 max_tokens=128,
                 audios=audios,
                 lora_request=lora_request,
-<<<<<<< HEAD
             )
             for prompts, audios in inputs
         ]
@@ -83,15 +62,6 @@ def run_test(vllm_runner, audio_assets, lora_request, expected_suffix,
 
 
 @create_new_process_for_each_test()
-=======
-            ) for prompts, audios in inputs
-        ]
-
-        assert vllm_outputs_with_default_lora[-1][-1][-1].endswith(
-            expected_suffix)
-
-
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 def test_active_default_mm_lora(
     vllm_runner: type[VllmRunner],
     audio_assets: AudioTestAssets,
@@ -106,10 +76,7 @@ def test_active_default_mm_lora(
     )
 
 
-<<<<<<< HEAD
 @create_new_process_for_each_test()
-=======
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 def test_inactive_default_mm_lora(
     vllm_runner: type[VllmRunner],
     audio_assets: AudioTestAssets,
@@ -125,10 +92,7 @@ def test_inactive_default_mm_lora(
     )
 
 
-<<<<<<< HEAD
 @create_new_process_for_each_test()
-=======
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 def test_default_mm_lora_succeeds_with_redundant_lora_request(
     vllm_runner: type[VllmRunner],
     audio_assets: AudioTestAssets,
@@ -143,10 +107,7 @@ def test_default_mm_lora_succeeds_with_redundant_lora_request(
     )
 
 
-<<<<<<< HEAD
 @create_new_process_for_each_test()
-=======
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
 def test_default_mm_lora_fails_with_overridden_lora_request(
     vllm_runner: type[VllmRunner],
     audio_assets: AudioTestAssets,
@@ -160,7 +121,6 @@ def test_default_mm_lora_fails_with_overridden_lora_request(
         default_mm_loras={"audio": IMAGE_LORA_PATH},
         expected_suffix=RESPONSE_SUFFIX_WITH_LORA,
     )
-<<<<<<< HEAD
 
 
 @create_new_process_for_each_test()
@@ -195,5 +155,3 @@ def test_default_mm_lora_does_not_expand_string_reqs(vllm_runner):
         engine_args, engine_kwargs = mock_add_request.call_args
         assert engine_args[1]["prompt"] == AUDIO_PROMPT
         assert engine_kwargs["lora_request"] is None
-=======
->>>>>>> 082d4f507 ([Core] Add Support for Default Modality Specific LoRAs [generate / chat completions] (#19126))
