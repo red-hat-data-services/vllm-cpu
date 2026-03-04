@@ -39,12 +39,6 @@ cd ${CURDIR}
 git clone --recursive https://github.com/apache/arrow.git
 cd arrow/cpp
 
-# Patch Arrow to disable xsimd includes (avoid version compatibility issues)
-sed -i 's/#include <xsimd\/xsimd.hpp>/\/\/ #include <xsimd\/xsimd.hpp>/' \
-    src/arrow/util/bpacking_simd128_generated_internal.h
-sed -i 's/#include "arrow\/util\/bpacking_simd128_generated_internal.h"/\/\/ #include "arrow\/util\/bpacking_simd128_generated_internal.h"/' \
-    src/arrow/util/bpacking_simd_default.cc
-
 mkdir -p release
 cd release
 cmake -DCMAKE_BUILD_TYPE=Release \
