@@ -373,6 +373,7 @@ class LlamaNemotronVLChatModel(nn.Module, SupportsMultiModal, SupportsPP, Suppor
         multimodal_config = vllm_config.model_config.multimodal_config
 
         self.config = config
+        self.model_config = vllm_config.model_config
         self.multimodal_config = multimodal_config
         self._patch_quant_config(config, quant_config)
 
@@ -427,7 +428,10 @@ class LlamaNemotronVLChatModel(nn.Module, SupportsMultiModal, SupportsPP, Suppor
         *,
         prefix: str,
     ):
-        return AutoModel.from_config(config.vision_config, trust_remote_code=True)
+        return AutoModel.from_config(
+            config.vision_config,
+            trust_remote_code=self.model_config.trust_remote_code,
+        )
 
     def _init_mlp1(self, config: PretrainedConfig) -> nn.Module:
         vit_hidden_size = config.vit_hidden_size
