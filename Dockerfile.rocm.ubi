@@ -43,8 +43,8 @@ gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" > /etc/yum.repos.d/amdgpu.repo
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     microdnf install -y --nodocs \
-        # aiter calls `hipconfig` on import, which requires the hipcc compiler
-        which \
+        # aiter calls `hipconfig` on import, which requires hip-devel. It also requires `git` until https://github.com/ROCm/aiter/pull/2226 is merged
+        git \
         amd-smi-lib \
         hipcc \
         hip-devel \
