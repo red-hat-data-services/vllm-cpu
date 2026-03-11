@@ -220,7 +220,7 @@ install_numba() {
 install_llvmlite() {
     cd ${CURDIR}
 
-    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
+    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.46.0}
 
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
@@ -273,7 +273,7 @@ install_opencv
 cd ${CURDIR}
 source /opt/rh/gcc-toolset-14/enable
 
-# llvmlite==0.44.0 needs setuptools<70
+# llvmlite==0.46.0 needs setuptools<70
 echo "setuptools<70.0.0" > build_constraints.txt
 uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
 
