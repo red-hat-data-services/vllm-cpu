@@ -43,26 +43,11 @@ gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" > /etc/yum.repos.d/amdgpu.repo
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     microdnf install -y --nodocs \
-        # aiter requires rocm dev dependencies (and temporarily, which, see https://github.com/ROCm/aiter/pull/932)
-        which \
+        # aiter calls `hipconfig` on import, which requires hip-devel. It also requires `git` until https://github.com/ROCm/aiter/pull/2226 is merged
+        git \
         amd-smi-lib \
-        hipblas-devel \
-        hipblaslt-devel \
         hipcc \
         hip-devel \
-        hipcub-devel \
-        hipfft-devel \
-        hiprand-devel \
-        hipsolver-devel \
-        hipsparse-devel \
-        hsa-rocr-devel \
-        miopen-hip-devel \
-        rccl-devel \
-        rocblas-devel \
-        rocm-device-libs \
-        rocprim-devel \
-        rocrand-devel \
-        rocthrust-devel \
         # Install libdrm-amdgpu to avoid errors when retrieving device information (amdgpu.ids: No such file or directory)
         libdrm-amdgpu \
         && \
