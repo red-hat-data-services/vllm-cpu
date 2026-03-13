@@ -42,6 +42,10 @@ def test_compile_config_repr_succeeds():
     assert "inductor_passes" in val
 
 
+@pytest.mark.skipif(
+    current_platform.is_cpu(),
+    reason="CPU platforms force async_scheduling to False"
+)
 def test_async_scheduling_with_pipeline_parallelism_is_allowed():
     cfg = VllmConfig(
         scheduler_config=SchedulerConfig(
