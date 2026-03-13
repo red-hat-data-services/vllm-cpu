@@ -132,6 +132,7 @@ install_torch_family() {
     export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
     git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
     cd vision
+    uv pip install "setuptools<70"
     MAX_JOBS=${MAX_JOBS:-$(nproc)} \
     BUILD_VERSION=${TORCHVISION_VERSION} \
     uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
