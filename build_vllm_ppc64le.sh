@@ -132,6 +132,7 @@ install_torch_family() {
     export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
     git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
     cd vision
+    uv pip install "setuptools<70"
     MAX_JOBS=${MAX_JOBS:-$(nproc)} \
     BUILD_VERSION=${TORCHVISION_VERSION} \
     uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
@@ -273,7 +274,7 @@ install_opencv
 cd ${CURDIR}
 source /opt/rh/gcc-toolset-14/enable
 
-# llvmlite==0.44.0 needs setuptools<70
+# llvmlite==0.46.0 needs setuptools<70
 echo "setuptools<70.0.0" > build_constraints.txt
 uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
 

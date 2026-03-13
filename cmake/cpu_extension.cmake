@@ -13,6 +13,8 @@ endif()
 #
 # Define environment variables for special configurations
 #
+set(ENABLE_AVX2 $ENV{VLLM_CPU_AVX2})
+set(ENABLE_AVX512 $ENV{VLLM_CPU_AVX512})
 set(ENABLE_AVX512BF16 $ENV{VLLM_CPU_AVX512BF16})
 set(ENABLE_AVX512VNNI $ENV{VLLM_CPU_AVX512VNNI})
 set(ENABLE_AMXBF16 $ENV{VLLM_CPU_AMXBF16})
@@ -103,6 +105,16 @@ else()
     find_isa(${CPUINFO} "bf16" ARM_BF16_FOUND) # Check for ARM BF16 support
     find_isa(${CPUINFO} "S390" S390_FOUND)
     find_isa(${CPUINFO} "v" RVV_FOUND) # Check for RISC-V RVV support
+
+    # Support cross-compilation by allowing override via environment variables
+    if (ENABLE_AVX2)
+        set(AVX2_FOUND ON)
+        message(STATUS "AVX2 support enabled via VLLM_CPU_AVX2 environment variable")
+    endif()
+    if (ENABLE_AVX512)
+        set(AVX512_FOUND ON)
+        message(STATUS "AVX512 support enabled via VLLM_CPU_AVX512 environment variable")
+    endif()
 endif()
 
 if (AVX512_FOUND AND NOT AVX512_DISABLED)
@@ -218,20 +230,12 @@ if ((AVX512_FOUND AND NOT AVX512_DISABLED) OR (ASIMD_FOUND AND NOT APPLE_SILICON
         if(NOT NPROC)
             set(NPROC 4)
         endif()
-        # locate PyTorch's libgomp (e.g. site-packages/torch.libs/libgomp-947d5fa1.so.1.0.0)
-        # and create a local shim dir with it
-        vllm_prepare_torch_gomp_shim(VLLM_TORCH_GOMP_SHIM_DIR)
-
+        # Use system libgomp from GCC instead of torch's bundled libgomp
         find_library(OPEN_MP
             NAMES gomp
-            PATHS ${VLLM_TORCH_GOMP_SHIM_DIR}
-            NO_DEFAULT_PATH
+            HINTS ${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}
             REQUIRED
         )
-        # Set LD_LIBRARY_PATH to include the shim dir at build time to use the same libgomp as PyTorch
-        if (OPEN_MP)
-            set(ENV{LD_LIBRARY_PATH} "${VLLM_TORCH_GOMP_SHIM_DIR}:$ENV{LD_LIBRARY_PATH}")
-        endif()
 
         # Fetch and populate ACL
         if(DEFINED ENV{ACL_ROOT_DIR} AND IS_DIRECTORY "$ENV{ACL_ROOT_DIR}")
@@ -348,6 +352,19 @@ else()
 endif()
 
 #
+# Generate CPU attention dispatch header
+#
+message(STATUS "Generating CPU attention dispatch header")
+execute_process(
+    COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/csrc/cpu/generate_cpu_attn_dispatch.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/csrc/cpu
+    RESULT_VARIABLE GEN_RESULT
+)
+if(NOT GEN_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to generate CPU attention dispatch header")
+endif()
+
+#
 # _C extension
 #
 set(VLLM_EXT_SRC
@@ -377,6 +394,12 @@ if (AVX512_FOUND AND NOT AVX512_DISABLED)
             ${VLLM_EXT_SRC})
         add_compile_definitions(-DCPU_CAPABILITY_AVX512)
     endif()
+endif()
+
+if (ASIMD_FOUND AND NOT APPLE_SILICON_FOUND)
+    set(VLLM_EXT_SRC
+        "csrc/cpu/shm.cpp"
+        ${VLLM_EXT_SRC})
 endif()
 
 if(USE_ONEDNN)
