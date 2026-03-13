@@ -3,7 +3,7 @@
 """Pydantic models for Anthropic API protocol"""
 
 import time
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -38,8 +38,10 @@ class AnthropicContentBlock(BaseModel):
     text: str | None = None
     # For image content
     source: dict[str, Any] | None = None
-    # For tool use/result
+    # for tool_use
     id: str | None = None
+    # For tool_result
+    tool_use_id: str | None = None
     name: str | None = None
     input: dict[str, Any] | None = None
     content: str | list[dict[str, Any]] | None = None
@@ -135,7 +137,7 @@ class AnthropicStreamEvent(BaseModel):
         "ping",
         "error",
     ]
-    message: Optional["AnthropicMessagesResponse"] = None
+    message: "AnthropicMessagesResponse | None" = None
     delta: AnthropicDelta | None = None
     content_block: AnthropicContentBlock | None = None
     index: int | None = None
