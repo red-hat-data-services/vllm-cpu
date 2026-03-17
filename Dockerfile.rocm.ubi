@@ -74,7 +74,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     ./payload/run.sh
 
 ENV HF_HUB_OFFLINE=1 \
-    HOME=/home/vllm \
     VLLM_USAGE_STATS_SERVER=https://console.redhat.com/api/rhaiis-stats \
     VLLM_USAGE_SOURCE=quay-docker-image \
     # Silences the HF Tokenizers warning
