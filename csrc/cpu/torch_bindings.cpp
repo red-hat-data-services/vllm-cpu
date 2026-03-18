@@ -4,10 +4,6 @@
 
 #include <torch/library.h>
 
-// Note: overwrite the external defination for sharing same name between
-// libraries use different ISAs.
-#define TORCH_EXTENSION_NAME _C
-
 std::string init_cpu_threads_env(const std::string& cpu_ids);
 
 void release_dnnl_matmul_handler(int64_t handler);
@@ -327,12 +323,19 @@ TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops) {
       "str act, str isa) -> ()");
   ops.impl("cpu_fused_moe", torch::kCPU, &cpu_fused_moe);
 #endif
-  ops.def("init_cpu_threads_env(str cpu_ids) -> str", &init_cpu_threads_env);
-  ops.def(
+}
+
+TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _utils), utils) {
+  // CPU utils
+  utils.def("init_cpu_threads_env(str cpu_ids) -> str", &init_cpu_threads_env);
+}
+
+TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _cpu), cpu_ops) {
+  cpu_ops.def(
       "mla_decode_kvcache("
       "   Tensor! out, Tensor query, Tensor kv_cache,"
       "   float scale, Tensor block_tables, Tensor seq_lens) -> ()");
-  ops.impl("mla_decode_kvcache", torch::kCPU, &mla_decode_kvcache);
+  cpu_ops.impl("mla_decode_kvcache", torch::kCPU, &mla_decode_kvcache);
 }
 
 REGISTER_EXTENSION(TORCH_EXTENSION_NAME)
