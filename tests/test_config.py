@@ -42,6 +42,10 @@ def test_compile_config_repr_succeeds():
     assert "inductor_passes" in val
 
 
+@pytest.mark.skipif(
+    current_platform.is_cpu(),
+    reason="CPU platforms force async_scheduling to False"
+)
 def test_async_scheduling_with_pipeline_parallelism_is_allowed():
     cfg = VllmConfig(
         scheduler_config=SchedulerConfig(
@@ -926,12 +930,17 @@ def test_vllm_config_defaults(model_id, compiliation_config, optimization_level)
     # Verify other compilation_config defaults
     compilation_config_dict = default_config["compilation_config"]
     for k, v in compilation_config_dict.items():
-        if k != "pass_config":
-            actual = getattr(vllm_config.compilation_config, k)
-            expected = v(vllm_config) if callable(v) else v
-            assert actual == expected, (
-                f"compilation_config.{k}: expected {expected}, got {actual}"
-            )
+        if k == "pass_config":
+            continue
+        actual = getattr(vllm_config.compilation_config, k)
+        expected = v(vllm_config) if callable(v) else v
+        # On platforms without static graph support, __post_init__ forces
+        # cudagraph_mode to NONE; expect that instead of the level default.
+        if k == "cudagraph_mode" and not current_platform.support_static_graph_mode():
+            expected = CUDAGraphMode.NONE
+        assert actual == expected, (
+            f"compilation_config.{k}: expected {expected}, got {actual}"
+        )
 
 
 def test_vllm_config_callable_defaults():
@@ -969,6 +978,10 @@ def test_vllm_config_callable_defaults():
     assert enable_if_sequential(config_quantized) is True
 
 
+@pytest.mark.skipif(
+    not current_platform.support_static_graph_mode(),
+    reason="Explicit overrides may be force-overwritten without static graph support.",
+)
 def test_vllm_config_explicit_overrides():
     """Test that explicit property overrides work correctly with callable defaults.
 
