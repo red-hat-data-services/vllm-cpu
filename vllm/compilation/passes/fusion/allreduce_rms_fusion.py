@@ -744,16 +744,26 @@ class AllReduceFusionPass(VllmPatternMatcherPass):
             scope="global",
         )
 
-        self.ipc_handles, workspace_tensor = (
-            flashinfer_comm.trtllm_create_ipc_workspace_for_all_reduce_fusion(
-                tp_rank=rank,
-                tp_size=self.tp_size,
+        try:
+            self.workspace = flashinfer_comm.create_allreduce_fusion_workspace(
+                backend="trtllm",
+                world_size=self.tp_size,
+                rank=rank,
                 max_token_num=self.max_token_num,
                 hidden_dim=self.hidden_dim,
-                group=self.group,
-                use_fp32_lamport=use_fp32_lamport,
+                dtype=self.model_dtype,
             )
-        )
+        except RuntimeError as e:
+            if "multicast" not in str(e).lower():
+                raise
+            logger.warning_once(
+                "AllReduce fusion pass is disabled: flashinfer workspace "
+                "creation failed: %s. This is expected on GPUs without "
+                "NVSwitch (e.g., NVLink bridge-only or PCIe topologies). "
+                "Falling back to non-fused allreduce.",
+                str(e),
+            )
+            return
 
         global _FI_WORKSPACE_TENSOR
         _FI_WORKSPACE_TENSOR = workspace_tensor
