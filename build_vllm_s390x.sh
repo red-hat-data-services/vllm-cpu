@@ -62,10 +62,12 @@ make install
 cd ../../python
 export PYARROW_PARALLEL=4
 export ARROW_BUILD_TYPE=release
-uv pip install -r requirements-build.txt
+export ARROW_HOME=/usr/local
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-python setup.py build_ext --build-type=$ARROW_BUILD_TYPE --bundle-arrow-cpp --inplace
-python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
+export PYARROW_BUNDLE_ARROW_CPP=1
+uv pip install -U pip build
+uv pip install -r requirements-build.txt
+python -m build --wheel --outdir "${WHEEL_DIR}"
 
 # -------------------------
 # numactl
