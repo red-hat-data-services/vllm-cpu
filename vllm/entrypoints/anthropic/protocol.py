@@ -45,7 +45,7 @@ class AnthropicContentBlock(BaseModel):
     text: str | None = None
     # For image content
     source: dict[str, Any] | None = None
-    # for tool_use
+    # For tool use/result
     id: str | None = None
     tool_use_id: str | None = None
     name: str | None = None

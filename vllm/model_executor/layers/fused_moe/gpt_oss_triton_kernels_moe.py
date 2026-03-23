@@ -504,7 +504,7 @@ def make_routing_data(
 
     # matmul_ogs expects invalid topk_weights to be -1s
     topk_weights = torch.where(topk_ids == -1, -1.0, topk_weights)
-    routing_data, gather_indx, scatter_indx = routing_from_bitmatrix(
+    routing_data, gather_indx, scatter_indx = legacy_routing_from_bitmatrix(
         bitmatrix, topk_weights, topk_ids, num_local_experts, num_topk
     )
 
