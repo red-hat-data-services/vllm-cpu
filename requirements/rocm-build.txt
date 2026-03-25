@@ -15,4 +15,3 @@ wheel
 jinja2>=3.1.6
 amdsmi==6.4.3
 timm>=1.0.17
-regex
