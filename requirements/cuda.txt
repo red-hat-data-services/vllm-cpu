@@ -4,7 +4,6 @@
 numba == 0.63.1 # Required for N-gram speculative decoding # bumped to 0.63.1 to fix a crash on CUDA 13 https://issues.redhat.com/browse/AIPCC-9384
 
 # Dependencies for NVIDIA GPUs
-ray>=2.48.0
 torch==2.9.1
 torchaudio==2.9.1
 # These must be updated alongside torch
