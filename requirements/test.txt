@@ -954,6 +954,10 @@ rasterio==1.4.3
     #   rioxarray
     #   terratorch
     #   torchgeo
+ray==2.48.0
+    # via
+    #   -c requirements/cuda.txt
+    #   -r requirements/test.in
 redis==5.2.0
     # via tensorizer
 referencing==0.35.1
