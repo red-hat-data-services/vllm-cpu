@@ -209,8 +209,9 @@ def get_vllm_port() -> Optional[int]:
     try:
         return int(port)
     except ValueError as err:
-        from urllib.parse import urlparse
-        parsed = urlparse(port)
+        from urllib3.util import parse_url
+
+        parsed = parse_url(port)
         if parsed.scheme:
             raise ValueError(
                 f"VLLM_PORT '{port}' appears to be a URI. "
