@@ -3,7 +3,7 @@ set -eoux pipefail
 
 # assume we are in vLLM's repo root
 CURDIR=$(pwd)
-
+export IBM_DEVPI_URL=${IBM_DEVPI_URL:-"https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/"}
 # install development packages
 rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 microdnf install -y \
@@ -47,17 +47,17 @@ autoreconf -i && ./configure && make -j ${MAX_JOBS:-$(nproc)} && make install
 : ================== Installing OpenBlas ==================
 # IMPORTANT: Ensure OpenBlas is installed in the final image
 cd /root
-export OPENBLAS_VERSION=${OPENBLAS_VERSION:-$(curl -s https://api.github.com/repos/OpenMathLib/OpenBLAS/releases/latest | jq -r '.tag_name' | sed 's/v//')}
+export OPENBLAS_VERSION=$(curl -s https://api.github.com/repos/OpenMathLib/OpenBLAS/releases/latest | jq -r '.tag_name' | sed 's/v//')
+
 curl -L https://github.com/OpenMathLib/OpenBLAS/releases/download/v${OPENBLAS_VERSION}/OpenBLAS-${OPENBLAS_VERSION}.tar.gz | tar xz
-# rename directory for mounting (without knowing version numbers) in multistage builds
+
 mv OpenBLAS-${OPENBLAS_VERSION}/ OpenBLAS/
 cd OpenBLAS/
 
-make -j${MAX_JOBS} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS=120 DYNAMIC_ARCH=1 INTERFACE64=0 && make install
+make -j${MAX_JOBS} TARGET=POWER9 BUILD_BFLOAT16=1 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS=120 DYNAMIC_ARCH=1 INTERFACE64=0
+make install
 
-# set path for openblas
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/OpenBLAS/lib/:/usr/local/lib64:/usr/local/lib
-export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib
 
 cd ${CURDIR}
 
@@ -104,23 +104,39 @@ install_pyzmq() {
     rm -rf ${TEMP_BUILD_DIR} /pyzmqwheel
 }
 install_torch_family() {
-    cd ${CURDIR}
 
-    export TORCH_VERSION=${TORCH_VERSION:-$(grep -E '^torch==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
+    cd ${CURDIR}
+    export TORCH_VERSION=2.10.0
+    TORCH_VERSION=${TORCH_VERSION:-$(grep -E '^torch==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
+    echo "Torch version: $TORCH_VERSION"
     TORCHVISION_VERSION=0.24.1
     export TORCHVISION_VERSION=${TORCHVISION_VERSION:-$(grep -E '^torchvision==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
     TORCHAUDIO_VERSION=2.9.1
     export TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$(grep -E '^torchaudio==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
-    
+
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
-    
+
+    export BLAS=OpenBLAS
+    export USE_OPENMP=1
+    export USE_MKLDNN=OFF
+    export USE_MKLDNN_CBLAS=OFF
+    export OPENBLAS_HOME="/usr/local"
+    export PKG_CONFIG_PATH="$OPENBLAS_HOME/lib/pkgconfig:${PKG_CONFIG_PATH}"
+    export LIBRARY_PATH="$OPENBLAS_HOME/lib:${LD_LIBRARY_PATH}"
+    #export CMAKE_PREFIX_PATH="$OPENBLAS_HOME:${CMAKE_PREFIX_PATH}"
+    export C_INCLUDE_DIR="$OPENBLAS_HOME/include"
+    export CPLUS_INCLUDE_DIR="$OPENBLAS_HOME/include"
+
     : ================== Installing Pytorch ==================
     export _GLIBCXX_USE_CXX11_ABI=1
     git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
     cd pytorch
     sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
-    uv pip install -r requirements.txt
+    uv pip install -r requirements.txt \
+       --extra-index-url "$IBM_DEVPI_URL" \
+       --index-strategy unsafe-best-match \
+       --no-build-isolation
     python setup.py develop
     rm -f dist/torch*+git*whl
     MAX_JOBS=${MAX_JOBS:-$(nproc)} \
