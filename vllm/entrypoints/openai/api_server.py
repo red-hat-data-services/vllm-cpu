@@ -987,9 +987,12 @@ def build_app(args: Namespace) -> FastAPI:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException):
         err = ErrorResponse(
-            error=ErrorInfo(message=sanitize_message(exc.detail),
-                            type=HTTPStatus(exc.status_code).phrase,
-                            code=exc.status_code))
+            error=ErrorInfo(
+                message=sanitize_message(exc.detail),
+                type=HTTPStatus(exc.status_code).phrase,
+                code=exc.status_code,
+            )
+        )
         return JSONResponse(err.model_dump(), status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
@@ -1002,11 +1005,14 @@ def build_app(args: Namespace) -> FastAPI:
         else:
             message = exc_str
 
-        err = ErrorResponse(error=ErrorInfo(message=sanitize_message(message),
-                                            type=HTTPStatus.BAD_REQUEST.phrase,
-                                            code=HTTPStatus.BAD_REQUEST))
-        return JSONResponse(err.model_dump(),
-                            status_code=HTTPStatus.BAD_REQUEST)
+        err = ErrorResponse(
+            error=ErrorInfo(
+                message=sanitize_message(message),
+                type=HTTPStatus.BAD_REQUEST.phrase,
+                code=HTTPStatus.BAD_REQUEST,
+            )
+        )
+        return JSONResponse(err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
 
     # Ensure --api-key option from CLI takes precedence over VLLM_API_KEY
     if tokens := [key for key in (args.api_key or [envs.VLLM_API_KEY]) if key]:
