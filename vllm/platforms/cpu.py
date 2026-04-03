@@ -15,7 +15,7 @@ import torch
 from vllm import envs
 from vllm.logger import init_logger
 from vllm.utils.ompmultiprocessing import OMPProcessManager
-from vllm.utils.torch_utils import is_quantized_kv_cache
+from vllm.v1.attention.backend import is_quantized_kv_cache
 from vllm.v1.attention.backends.registry import AttentionBackendEnum
 
 from .interface import CpuArchEnum, Platform, PlatformEnum
