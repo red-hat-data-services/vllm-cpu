@@ -15,6 +15,9 @@ import torch
 from vllm import envs
 from vllm.logger import init_logger
 from vllm.utils.ompmultiprocessing import OMPProcessManager
+# TODO(INFERENG-5593): Remove on next upstream sync. Upstream moved
+# is_quantized_kv_cache to vllm.utils.torch_utils (vllm#38659), but our
+# sync branch doesn't have that intermediate refactor yet.
 from vllm.v1.attention.backend import is_quantized_kv_cache
 from vllm.v1.attention.backends.registry import AttentionBackendEnum
 
