@@ -19,6 +19,11 @@ variable "PYTHON_VERSION" {
 
 variable "ROCM_VERSION" {
   # This can be overridden by the prepare-payload action
+  default = "7.1.1"
+}
+
+variable "AMDGPU_VERSION" {
+  # ROCm 7.x dropped libdrm-amdgpu from AMDGPU repos; use an older version
   default = "6.4.3"
 }
 
@@ -78,6 +83,7 @@ target "rocm" {
   args = {
     PYTHON_VERSION = "${PYTHON_VERSION}"
     ROCM_VERSION = "${ROCM_VERSION}"
+    AMDGPU_VERSION = "${AMDGPU_VERSION}"
   }
 
   tags = [
