@@ -418,6 +418,7 @@ export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' 
 # fix conflict
 rm -f /opt/vllm/bin/cmake
 microdnf install -y cmake
+source /opt/rh/gcc-toolset-14/enable
 
 uv pip install -r requirements/common.txt \
                -r requirements/cpu.txt \
