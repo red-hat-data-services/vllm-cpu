@@ -32,7 +32,7 @@ microdnf install -y \
     harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel \
     llvm15-devel libraqm-devel libtiff-devel libwebp-devel libxcb-devel \
     ninja-build openjpeg2-devel pkgconfig protobuf* \
-    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf file cmake
+    tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf file
 
 ########################################
 # Python 3.12 virtual environment
@@ -41,7 +41,7 @@ microdnf install -y \
 python3.12 -m venv /opt/vllm
 source /opt/vllm/bin/activate
 
-export PATH=/usr/bin:/usr/local/bin:/opt/vllm/bin:$PATH
+export PATH=/opt/vllm/bin:$PATH
 
 python --version
 
@@ -381,11 +381,12 @@ install_llvmlite
 install_pyarrow
 install_numba
 install_xgrammar
-#install_opencv
 
 ########################################
 # install built wheels
 ########################################
+#echo "setuptools<70.0.0" > build_constraints.txt
+#uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
 uv pip install maturin setuptools-rust scikit-build-core pybind11 nanobind \
     --no-build-isolation
 
@@ -393,6 +394,9 @@ uv pip install ${WHEEL_DIR}/*.whl \
     --extra-index-url "$IBM_DEVPI_URL" \
     --index-strategy unsafe-best-match \
     --no-build-isolation
+
+#sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
+#uv pip install ${WHEEL_DIR}/*.whl || true
 
 ########################################
 # install remaining deps
@@ -410,6 +414,10 @@ uv pip install httptools \
 uv pip install "setuptools<70" --no-build-isolation
 
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
+
+# fix conflict
+rm -f /opt/vllm/bin/cmake
+microdnf install -y cmake
 
 uv pip install -r requirements/common.txt \
                -r requirements/cpu.txt \
