@@ -23,7 +23,7 @@ export PATH=$PATH:/usr/lib64/llvm15/bin
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
-uv pip install -U pip uv setuptools build wheel cmake
+uv pip install -U pip uv setuptools build wheel cmake cython meson-python
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
