@@ -21,6 +21,7 @@ ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 ENV CARGO_HOME=/root/.cargo
 ENV RUSTUP_HOME=/root/.rustup
 ENV PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH
+ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
 
 RUN --mount=type=cache,target=/var/cache/dnf \
     microdnf install -y \
@@ -50,8 +51,7 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     source /opt/rh/gcc-toolset-14/enable && \
     pip install -U uv
-RUN --mount=type=cache,target=/var/cache/dnf \
-    microdnf install -y numactl
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install 'setuptools==77.0.3' && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \
