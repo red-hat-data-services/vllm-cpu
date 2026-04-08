@@ -46,11 +46,21 @@ COPY . .
 
 # Build and install vllm (run this on both s390x as well as ppc64le)
 # build & install vLLM so that all transitive dependencies are build/downloaded into the uv cache
+
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install -U setuptools && \
+    source /opt/rh/gcc-toolset-14/enable && \
+    pip install -U uv
+RUN --mount=type=cache,target=/var/cache/dnf \
+    microdnf install -y numactl
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install 'setuptools==77.0.3' && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \
       --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
-    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]"
+    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" --refresh
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    source /opt/rh/gcc-toolset-14/enable && \
+    uv pip install $WHEEL_DIR/*.whl --verbose --force-reinstall --refresh
 
 ###############################################################
 #                   FINAL VLLM IMAGE STAGE                    #
@@ -140,6 +150,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':') && \
     # --offline will ensure wheels are picked from uv cache and nothing is pulled from pypi/built from source
     # vllm wheel should be present in /wheelsdir/ ( at least for ppc64le - and transitive dependencies in uv cache )
+    uv pip install 'setuptools==77.0.3' && \
     HOME=/root uv pip install /wheelsdir/*.whl --offline
 
 WORKDIR /home/vllm
