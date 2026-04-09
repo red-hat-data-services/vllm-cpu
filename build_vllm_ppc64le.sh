@@ -78,7 +78,6 @@ export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 # wheel dir
 ########################################
 
-export WHEEL_DIR=/wheelhouse
 mkdir -p $WHEEL_DIR
 
 ########################################
@@ -414,12 +413,6 @@ uv pip install httptools \
 uv pip install "setuptools<70" --no-build-isolation
 
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
-
-# fix conflict
-rm -f /opt/vllm/bin/cmake
-# install numactl to fix torch ImportError: libnuma.so.1
-microdnf install -y cmake numactl
-source /opt/rh/gcc-toolset-14/enable
 
 uv pip install -r requirements/common.txt \
                -r requirements/cpu.txt \
