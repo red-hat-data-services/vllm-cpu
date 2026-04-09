@@ -25,9 +25,7 @@ fi
 
 rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 
-microdnf install -y \
-    python3.12 python3.12-devel python3.12-pip gcc \
-    git jq gcc-toolset-14 gcc-toolset-14-libatomic-devel \
+microdnf install -y git jq gcc-toolset-14 gcc-toolset-14-libatomic-devel \
     automake libtool clang-devel openssl-devel freetype-devel fribidi-devel \
     harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel \
     llvm15-devel libraqm-devel libtiff-devel libwebp-devel libxcb-devel \
@@ -413,6 +411,11 @@ uv pip install httptools \
 uv pip install "setuptools<70" --no-build-isolation
 
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
+
+# # fix conflict
+rm -f /opt/vllm/bin/cmake
+microdnf install -y cmake
+source /opt/rh/gcc-toolset-14/enable
 
 uv pip install -r requirements/common.txt \
                -r requirements/cpu.txt \
