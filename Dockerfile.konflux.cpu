@@ -47,6 +47,7 @@ COPY . .
 
 # Build and install vllm (run this on both s390x as well as ppc64le)
 # build & install vLLM so that all transitive dependencies are build/downloaded into the uv cache
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install 'setuptools==77.0.3' && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \

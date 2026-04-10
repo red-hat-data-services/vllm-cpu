@@ -1,136 +1,56 @@
 #!/bin/bash
 set -eoux pipefail
 
-########################################
-# Resolve repo root (IMPORTANT)
-########################################
-REPO_ROOT="$(pwd)"
-
-cd "$REPO_ROOT"
-
-########################################
-# DevPI configuration
-########################################
-
-IBM_DEVPI_URL=${IBM_DEVPI_URL:-"https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/"}
-
-if [[ -n "$IBM_DEVPI_URL" ]]; then
-    echo "Using IBM's Python index: $IBM_DEVPI_URL"
-    export PIP_EXTRA_INDEX_URL=$IBM_DEVPI_URL
-fi
-
-########################################
-# install system dependencies
-########################################
-
+# assume we are in vLLM's repo root
+CURDIR=$(pwd)
+export IBM_DEVPI_URL=${IBM_DEVPI_URL:-"https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/"}
+# install development packages
 rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-
-microdnf install -y git jq gcc-toolset-14 gcc-toolset-14-libatomic-devel \
-    automake libtool clang-devel openssl-devel freetype-devel fribidi-devel \
-    harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel \
-    llvm15-devel libraqm-devel libtiff-devel libwebp-devel libxcb-devel \
-    ninja-build openjpeg2-devel pkgconfig protobuf* \
+microdnf install -y \
+    git jq gcc-toolset-14 gcc-toolset-14-libatomic-devel automake libtool clang-devel openssl-devel freetype-devel fribidi-devel \
+    harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel llvm15-devel \
+    libraqm-devel libtiff-devel libwebp-devel libxcb-devel ninja-build openjpeg2-devel pkgconfig protobuf* \
     tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf file
 
-########################################
-# Python 3.12 virtual environment
-########################################
+# install rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-python3.12 -m venv /opt/vllm
-source /opt/vllm/bin/activate
+source /opt/rh/gcc-toolset-14/enable
+source /root/.cargo/env
+export PATH=/usr/lib64/llvm15/bin:$PATH;
+export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
 
-export PATH=/opt/vllm/bin:$PATH
 
-python --version
-
-########################################
-# install build tools (stable uv)
-########################################
+export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
 pip install -U pip
 pip install "uv==0.4.30"
 pip install "setuptools<70" build wheel cmake auditwheel
 uv pip install "setuptools<70" cython meson-python --no-build-isolation
 
-########################################
-# Rust
-########################################
-
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source /root/.cargo/env
-
-########################################
-# Compiler env
-########################################
-
-source /opt/rh/gcc-toolset-14/enable
-
-export PATH=/usr/lib64/llvm15/bin:$PATH
-export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config
-export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
-
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 
-########################################
-# wheel dir
-########################################
-
-mkdir -p $WHEEL_DIR
-
-########################################
-# DevPI helper
-########################################
-
-try_install_from_devpi() {
-    pkg=$1
-    if [[ -n "$IBM_DEVPI_URL" ]]; then
-        if uv pip install \
-            --extra-index-url "$IBM_DEVPI_URL" \
-            --index-strategy unsafe-best-match \
-            --no-build-isolation \
-            "$pkg"; then
-            echo "Installed $pkg from DevPI"
-            return 0
-        fi
-    fi
-    return 1
-}
-
-########################################
-# LAPACK
-########################################
-
+: ================== Installing Lapack ==================
+# IMPORTANT: Ensure Lapack is installed in the final image
 cd /root
-LAPACK_VERSION=$(curl -s https://api.github.com/repos/Reference-LAPACK/lapack/releases/latest | jq -r '.tag_name' | sed 's/v//')
-
-git clone --depth 1 https://github.com/Reference-LAPACK/lapack.git -b v${LAPACK_VERSION}
+export LAPACK_VERSION=${NUMACTL_VERSION:-$(curl -s https://api.github.com/repos/Reference-LAPACK/lapack/releases/latest | jq -r '.tag_name' | sed 's/v//')}
+git clone --recursive https://github.com/Reference-LAPACK/lapack.git -b v${LAPACK_VERSION}
 cd lapack
-cmake -B build -S .
-cmake --build build -j ${MAX_JOBS}
-cmake --install build
+cmake -B build -S . && cmake --build build -j ${MAX_JOBS:-$(nproc)} && cmake --install build
 
-########################################
-# NUMACTL
-########################################
-
+: ================== Installing Numactl ==================
+# IMPORTANT: Ensure Numactl is installed in the final image
 cd /root
-NUMACTL_VERSION=$(curl -s https://api.github.com/repos/numactl/numactl/releases/latest | jq -r '.tag_name' | sed 's/v//')
-
-git clone --depth 1 https://github.com/numactl/numactl.git -b v${NUMACTL_VERSION}
+export NUMACTL_VERSION=${NUMACTL_VERSION:-$(curl -s https://api.github.com/repos/numactl/numactl/releases/latest | jq -r '.tag_name' | sed 's/v//')}
+git clone --recursive https://github.com/numactl/numactl.git -b v${NUMACTL_VERSION}
 cd numactl
+autoreconf -i && ./configure && make -j ${MAX_JOBS:-$(nproc)} && make install
 
-autoreconf -i
-./configure
-make -j ${MAX_JOBS}
-make install
-
-########################################
-# OPENBLAS
-########################################
-
+: ================== Installing OpenBlas ==================
+# IMPORTANT: Ensure OpenBlas is installed in the final image
 cd /root
-OPENBLAS_VERSION=$(curl -s https://api.github.com/repos/OpenMathLib/OpenBLAS/releases/latest | jq -r '.tag_name' | sed 's/v//')
+export OPENBLAS_VERSION=$(curl -s https://api.github.com/repos/OpenMathLib/OpenBLAS/releases/latest | jq -r '.tag_name' | sed 's/v//')
 
 curl -L https://github.com/OpenMathLib/OpenBLAS/releases/download/v${OPENBLAS_VERSION}/OpenBLAS-${OPENBLAS_VERSION}.tar.gz | tar xz
 
@@ -142,13 +62,53 @@ make install
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib
 
-########################################
-# PYTORCH FAMILY
-########################################
+cd ${CURDIR}
 
+install_pillow() {
+    cd ${CURDIR}
+
+    export PILLOW_VERSION=${PILLOW_VERSION:-$(curl -s https://api.github.com/repos/python-pillow/Pillow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Pillow ==================
+    git clone --recursive https://github.com/python-pillow/Pillow.git -b ${PILLOW_VERSION}
+    cd Pillow
+    uv build --wheel --out-dir /pillowwheel
+
+    : ================= Fix Pillow Wheel ====================
+    cd /pillowwheel
+    auditwheel repair pillow*.whl
+    mv wheelhouse/pillow*.whl ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR} /pillowwheel
+}
+install_pyzmq() {
+    cd ${CURDIR}
+
+    export PYZMQ_VERSION=${PYZMQ_VERSION:-$(curl -sL https://api.github.com/repos/zeromq/pyzmq/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Pyzmq ==================
+    git clone --recursive https://github.com/zeromq/pyzmq.git -b v${PYZMQ_VERSION}
+    cd pyzmq
+    uv build --wheel --out-dir /pyzmqwheel
+
+    : ================= Fix Pyzmq Wheel ====================
+    cd /pyzmqwheel
+    auditwheel repair pyzmq*.whl
+    mv wheelhouse/pyzmq*.whl ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR} /pyzmqwheel
+}
 install_torch_family() {
+    cd ${CURDIR}
 
-    cd "$REPO_ROOT"
     export TORCH_VERSION=2.10.0
     TORCH_VERSION=${TORCH_VERSION:-$(grep -E '^torch==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
     echo "Torch version: $TORCH_VERSION"
@@ -207,22 +167,78 @@ install_torch_family() {
     BUILD_VERSION=${TORCHAUDIO_VERSION} \
     uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
 
-    cd ${REPO_ROOT}
+    cd ${CURDIR}
     rm -rf ${TEMP_BUILD_DIR}
+}
 
-#    try_install_from_devpi torchvision
-#    try_install_from_devpi torchaudio
+install_pyarrow() {
+    cd ${CURDIR}
+
+    export PYARROW_VERSION=${PYARROW_VERSION:-$(curl -s https://api.github.com/repos/apache/arrow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Pyarrow ==================
+    git clone --recursive https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
+    cd arrow/cpp
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DARROW_PYTHON=ON \
+        -DARROW_BUILD_TESTS=OFF \
+        -DARROW_JEMALLOC=ON \
+        -DARROW_BUILD_STATIC="OFF" \
+        -DARROW_PARQUET=ON \
+        ..
+    make install -j ${MAX_JOBS:-$(nproc)}
+    cd ../../python/
+    uv pip install -v -r requirements-wheel-build.txt
+    PYARROW_PARALLEL=${PYARROW_PARALLEL:-$(nproc)} \
+    python setup.py build_ext \
+        --build-type=release --bundle-arrow-cpp \
+        bdist_wheel --dist-dir ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR}
+}
+
+install_opencv() {
+
+export OPENCV_VERSION=92
+
+export ENABLE_HEADLESS=1
+git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
+    cd opencv-python && \
+    if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
+    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
+    #python -m build --wheel --installer=uv --outdir ${WHEEL_DIR}
+    uv build --wheel --out-dir ${WHEEL_DIR}
+}
+
+install_numba() {
+    cd ${CURDIR}
+
+    export NUMBA_VERSION=${NUMBA_VERSION:-$(grep -Eo '^numba.+;' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b' | tail -1)}
+
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+
+    : ================== Installing Numba ==================
+    git clone --recursive https://github.com/numba/numba.git -b ${NUMBA_VERSION}
+    cd numba
+    if ! grep '#include "dynamic_annotations.h"' numba/_dispatcher.cpp; then
+        sed -i '/#include "internal\/pycore_atomic.h"/i\#include "dynamic_annotations.h"' numba/_dispatcher.cpp;
+    fi
+    uv build --wheel --out-dir ${WHEEL_DIR}
+
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR}
 }
 
 # TODO(): figure out exact llvmlite version needed by numba
 install_llvmlite() {
-
-    if try_install_from_devpi llvmlite==0.44.0; then
-       return
-    fi
-
-    TEMP_BUILD_DIR=$(mktemp -d)
-    cd $TEMP_BUILD_DIR
+    cd ${CURDIR}
 
     export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
 
@@ -241,96 +257,12 @@ install_llvmlite() {
     auditwheel repair llvmlite*.whl
     mv wheelhouse/llvmlite*.whl ${WHEEL_DIR}
 
-    cd "$REPO_ROOT"
-    rm -rf $TEMP_BUILD_DIR
-}
-
-
-install_opencv() {
-    TEMP_BUILD_DIR=$(mktemp -d)
-    cd ${TEMP_BUILD_DIR}
-    export OPENCV_VERSION=92
-
-    export ENABLE_HEADLESS=1
-    git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
-    cd opencv-python && \
-    if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
-    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
-    #sed -i '/numpy==2.0.2/d' pyproject.toml && \
-    #try_install_from_devpi numpy==2.0.2 && \
-    #uv pip install scikit-build>=0.14.0 --no-build-isolation && \
-    uv build --wheel --out-dir ${WHEEL_DIR} && \
-    cd "$REPO_ROOT" && \
-    rm -rf $TEMP_BUILD_DIR
-
-}
-
-
-
-########################################
-# PYARROW
-########################################
-
-install_pyarrow() {
-
-TEMP_BUILD_DIR=$(mktemp -d)
-cd $TEMP_BUILD_DIR
-
-PYARROW_VERSION=$(curl -s https://api.github.com/repos/apache/arrow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9.]+")
-
-git clone --depth 1 https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
-
-cd arrow/cpp
-mkdir build && cd build
-
-cmake -DCMAKE_BUILD_TYPE=release \
--DCMAKE_INSTALL_PREFIX=/usr/local \
--DARROW_PYTHON=ON \
--DARROW_PARQUET=ON \
--DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..
-make install -j ${MAX_JOBS}
-
-cd ../../python
-uv pip install -r requirements-wheel-build.txt \
-    --extra-index-url "$IBM_DEVPI_URL" \
-    --index-strategy unsafe-best-match \
-    --no-build-isolation
-
-python setup.py build_ext \
---build-type=release --bundle-arrow-cpp \
-bdist_wheel --dist-dir ${WHEEL_DIR}
-
-cd "$REPO_ROOT"
-rm -rf $TEMP_BUILD_DIR
-}
-
-########################################
-# NUMBA
-########################################
-
-install_numba() {
-
-TEMP_BUILD_DIR=$(mktemp -d)
-cd $TEMP_BUILD_DIR
-
-#NUMBA_VERSION=$(grep -Eo '^numba.+;' $REPO_ROOT/requirements/cpu.txt | grep -Eo '[0-9.]+' | tail -1)
-NUMBA_VERSION=$(grep 'numba' "$REPO_ROOT/requirements/cpu.txt" | \
-    sed -E 's/.*numba *== *([0-9.]+).*/\1/' | \
-    head -1)
-git clone --depth 1 https://github.com/numba/numba.git -b ${NUMBA_VERSION}
-
-cd numba
-
-sed -i '/#include "internal\/pycore_atomic.h"/i\#include "dynamic_annotations.h"' numba/_dispatcher.cpp || true
-
-uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
-
-cd "$REPO_ROOT"
-rm -rf $TEMP_BUILD_DIR
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR}
 }
 
 install_xgrammar() {
-    cd ${REPO_ROOT}
+    cd ${CURDIR}
 
     echo "========== Installing xgrammar =========="
     export XGRAMMAR_VERSION="0.1.32"
@@ -362,61 +294,33 @@ install_xgrammar() {
     uv pip install ${WHEEL_DIR}/xgrammar*.whl
 
     echo "========== Cleanup =========="
-    cd ${REPO_ROOT}
+    cd ${CURDIR}
     rm -rf ${TEMP_BUILD_DIR}
 
     microdnf remove gcc-toolset-13 -y || true
 }
 
-
-########################################
-# RUN BUILDS
-########################################
-install_opencv
 install_torch_family
-install_llvmlite
 install_pyarrow
+install_llvmlite
 install_numba
+install_pillow
+install_pyzmq
 install_xgrammar
+install_opencv
 
-########################################
-# install built wheels
-########################################
-#echo "setuptools<70.0.0" > build_constraints.txt
-#uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
-uv pip install maturin setuptools-rust scikit-build-core pybind11 nanobind \
-    --no-build-isolation
+#wait $(jobs -p)
 
-uv pip install ${WHEEL_DIR}/*.whl \
-    --extra-index-url "$IBM_DEVPI_URL" \
-    --index-strategy unsafe-best-match \
-    --no-build-isolation
-
-#sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
-#uv pip install ${WHEEL_DIR}/*.whl || true
-
-########################################
-# install remaining deps
-########################################
-
-sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
-#pip install "setuptools>=75"
-
-uv pip install httptools \
-    --extra-index-url "$IBM_DEVPI_URL" \
-    --index-strategy unsafe-best-match \
-    --no-build-isolation || true
-
-# revert back for numba/llvmlite compatibility
-uv pip install "setuptools<70" --no-build-isolation
-
-export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
-
-# # fix conflict
-rm -f /opt/vllm/bin/cmake
-microdnf install -y cmake
+# back to vLLM root
+cd ${CURDIR}
 source /opt/rh/gcc-toolset-14/enable
 
-uv pip install -r requirements/common.txt \
-               -r requirements/cpu.txt \
-               -r requirements/build.txt --extra-index-url "$IBM_DEVPI_URL" --index-strategy unsafe-best-match
+# llvmlite==0.46.0 needs setuptools<70
+echo "setuptools<70.0.0" > build_constraints.txt
+uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
+
+uv pip install ${WHEEL_DIR}/*.whl
+sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
+# sentencepiece.pc is in some pkgconfig inside uv cache
+export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
+uv pip install -r requirements/common.txt -r requirements/cpu.txt -r requirements/build.txt --index-strategy unsafe-best-match
