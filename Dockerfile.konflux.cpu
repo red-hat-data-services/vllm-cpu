@@ -48,7 +48,7 @@ COPY . .
 # Build and install vllm (run this on both s390x as well as ppc64le)
 # build & install vLLM so that all transitive dependencies are build/downloaded into the uv cache
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install -U setuptools && \
+    uv pip install setuptools && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
     uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION};
 

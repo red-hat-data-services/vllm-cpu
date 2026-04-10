@@ -23,7 +23,7 @@ export PATH=$PATH:/usr/lib64/llvm15/bin
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
-uv pip install -U pip uv setuptools build wheel cmake cython meson-python
+uv pip install -U pip uv setuptools build wheel cmake cython meson-python --no-build-isolation
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
@@ -107,6 +107,7 @@ install_torch_family() {
     export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
     git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
     cd vision
+    uv pip install standard-pkg-resources --no-build-isolation
     MAX_JOBS=${MAX_JOBS:-$(nproc)} \
     BUILD_VERSION=${TORCHVISION_VERSION} \
     uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
