@@ -92,6 +92,7 @@ install_torch_family() {
     git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
     cd pytorch
     sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
+    uv pip install meson-python meson cython
     uv pip install -r requirements.txt \
        --extra-index-url "$IBM_DEVPI_URL" \
        --index-strategy unsafe-best-match \
