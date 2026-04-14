@@ -22,6 +22,8 @@ ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 ENV CARGO_HOME=/root/.cargo
 ENV RUSTUP_HOME=/root/.rustup
 ENV PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH
+ENV PCP_DIR=/opt/rh/gcc-toolset-14/root
+ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
 
 RUN --mount=type=cache,target=/var/cache/dnf \
     microdnf install -y \
@@ -52,6 +54,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
     uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION};
 
+RUN --mount=type=cache,target=/root/.cache/uv \
+    source /opt/rh/gcc-toolset-14/enable && \
+    uv pip install $WHEEL_DIR/*.whl --verbose --force-reinstall --refresh
 ###############################################################
 #                   FINAL VLLM IMAGE STAGE                    #
 ###############################################################
