@@ -193,7 +193,7 @@ install_torch_family() {
     export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
     git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
     cd vision
-    uv pip install "setuptools<70"
+    uv pip install standard-pkg-resources --no-build-isolation
     MAX_JOBS=${MAX_JOBS:-$(nproc)} \
     BUILD_VERSION=${TORCHVISION_VERSION} \
     uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
@@ -258,9 +258,6 @@ install_opencv() {
     cd opencv-python && \
     if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
     sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
-    #sed -i '/numpy==2.0.2/d' pyproject.toml && \
-    #try_install_from_devpi numpy==2.0.2 && \
-    #uv pip install scikit-build>=0.14.0 --no-build-isolation && \
     uv build --wheel --out-dir ${WHEEL_DIR} && \
     cd "$REPO_ROOT" && \
     rm -rf $TEMP_BUILD_DIR
@@ -341,10 +338,6 @@ install_xgrammar() {
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
 
-    echo "========== Using GCC 13 =========="
-    microdnf install -y gcc-toolset-13
-    source /opt/rh/gcc-toolset-13/enable
-
     export CFLAGS="-fno-lto -mcpu=power9"
     export CXXFLAGS="-fno-lto -mcpu=power9"
     export LDFLAGS="-fno-lto"
@@ -367,7 +360,6 @@ install_xgrammar() {
     cd ${REPO_ROOT}
     rm -rf ${TEMP_BUILD_DIR}
 
-    microdnf remove gcc-toolset-13 -y || true
 }
 
 
@@ -384,8 +376,6 @@ install_xgrammar
 ########################################
 # install built wheels
 ########################################
-#echo "setuptools<70.0.0" > build_constraints.txt
-#uv pip install ${WHEEL_DIR}/numba*.whl --build-constraint build_constraints.txt
 uv pip install maturin setuptools-rust scikit-build-core pybind11 nanobind \
     --no-build-isolation
 
@@ -402,7 +392,7 @@ uv pip install ${WHEEL_DIR}/*.whl \
 ########################################
 
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
-#pip install "setuptools>=75"
+
 
 uv pip install httptools \
     --extra-index-url "$IBM_DEVPI_URL" \
