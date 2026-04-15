@@ -23,7 +23,7 @@ export PATH=$PATH:/usr/lib64/llvm15/bin
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
-uv pip install -U pip uv setuptools build wheel cmake
+uv pip install -U pip uv setuptools build wheel cmake cython meson-python --no-build-isolation
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
@@ -65,12 +65,12 @@ cd ${CURDIR}
 install_torch_family() {
 
     cd ${CURDIR}
-    export TORCH_VERSION=2.10.0
+    export TORCH_VERSION=2.7.0
     TORCH_VERSION=${TORCH_VERSION:-$(grep -E '^torch==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
     echo "Torch version: $TORCH_VERSION"
-    TORCHVISION_VERSION=0.24.1
+    TORCHVISION_VERSION=0.22.0
     export TORCHVISION_VERSION=${TORCHVISION_VERSION:-$(grep -E '^torchvision==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
-    TORCHAUDIO_VERSION=2.9.1
+    TORCHAUDIO_VERSION=2.7.0
     export TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$(grep -E '^torchaudio==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
 
     TEMP_BUILD_DIR=$(mktemp -d)
@@ -107,6 +107,7 @@ install_torch_family() {
     export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
     git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
     cd vision
+    uv pip install standard-pkg-resources --no-build-isolation
     MAX_JOBS=${MAX_JOBS:-$(nproc)} \
     BUILD_VERSION=${TORCHVISION_VERSION} \
     uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
