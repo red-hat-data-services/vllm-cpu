@@ -126,7 +126,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     microdnf install --nodocs -y \
     libomp tar findutils openssl libicu \
     pkgconfig gcc-toolset-14 libsndfile \
-    libtiff libjpeg openjpeg2 libimagequant zlib \
+    libtiff libjpeg openjpeg2 libimagequant zlib gperftools-libs \
     freetype lcms2 libwebp tcl tk utf8proc \
     harfbuzz fribidi libxcb \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
@@ -152,6 +152,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     # vllm wheel should be present in /wheelsdir/ ( at least for ppc64le - and transitive dependencies in uv cache )
     uv pip install 'setuptools==77.0.3' && \
     HOME=/root uv pip install /wheelsdir/*.whl --offline
+
+ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
 WORKDIR /home/vllm
 
