@@ -19,6 +19,11 @@ variable "PYTHON_VERSION" {
 
 variable "ROCM_VERSION" {
   # This can be overridden by the prepare-payload action
+  default = "7.1.1"
+}
+
+variable "AMDGPU_VERSION" {
+  # ROCm 7.x dropped libdrm-amdgpu from AMDGPU repos; use an older version
   default = "6.4.3"
 }
 
@@ -50,6 +55,7 @@ group "default" {
     "cuda",
     "rocm",
     "tpu",
+    "hpu",
   ]
 }
 
@@ -58,7 +64,6 @@ target "cuda" {
   dockerfile = "Dockerfile.ubi"
 
   args = {
-    PYTHON_VERSION = "${PYTHON_VERSION}"
     CUDA_MAJOR =  "12"
     CUDA_MINOR =  "9"
   }
@@ -76,8 +81,8 @@ target "rocm" {
   dockerfile = "Dockerfile.rocm.ubi"
 
   args = {
-    PYTHON_VERSION = "${PYTHON_VERSION}"
     ROCM_VERSION = "${ROCM_VERSION}"
+    AMDGPU_VERSION = "${AMDGPU_VERSION}"
   }
 
   tags = [
@@ -93,7 +98,6 @@ target "cpu" {
   dockerfile = "Dockerfile.cpu.ubi"
 
   args = {
-    PYTHON_VERSION = "${PYTHON_VERSION}"
   }
 
   tags = [
@@ -110,7 +114,6 @@ target "tpu" {
   dockerfile = "Dockerfile.tpu.ubi"
 
   args = {
-    PYTHON_VERSION = "${PYTHON_VERSION}"
   }
 
   tags = [
@@ -118,6 +121,25 @@ target "tpu" {
     "${REPOSITORY}:tpu-${GITHUB_SHA}",
     "${REPOSITORY}:tpu-${GITHUB_RUN_ID}",
     RELEASE_IMAGE ? "quay.io/vllm/vllm-tpu:${replace(VLLM_VERSION, "+", "_")}" : ""
+  ]
+
+}
+
+
+target "hpu" {
+  inherits = ["_common"]
+  dockerfile = "Dockerfile.hpu.ubi"
+
+  args = {
+    SYNAPSE_VERSION = "1.23.0"
+    SYNAPSE_REVISION = "695"
+  }
+
+  tags = [
+    "${REPOSITORY}:${replace(VLLM_VERSION, "+", "_")}", # vllm_version might contain local version specifiers (+) which are not valid tags
+    "${REPOSITORY}:hpu-${GITHUB_SHA}",
+    "${REPOSITORY}:hpu-${GITHUB_RUN_ID}",
+    RELEASE_IMAGE ? "quay.io/vllm/vllm-gaudi:${replace(VLLM_VERSION, "+", "_")}" : ""
   ]
 
 }
