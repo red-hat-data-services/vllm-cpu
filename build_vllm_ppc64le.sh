@@ -23,7 +23,10 @@ export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
-uv pip install -U pip uv setuptools build wheel cmake auditwheel
+pip install -U pip
+pip install "uv==0.4.30"
+pip install "setuptools<70" build wheel cmake auditwheel
+uv pip install "setuptools<70" cython meson-python --no-build-isolation
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
@@ -170,12 +173,12 @@ install_torch_family() {
 
 install_pyarrow() {
     cd ${CURDIR}
-    
+
     export PYARROW_VERSION=${PYARROW_VERSION:-$(curl -s https://api.github.com/repos/apache/arrow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
-    
+
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
-    
+
     : ================== Installing Pyarrow ==================
     git clone --recursive https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
     cd arrow/cpp
@@ -195,29 +198,32 @@ install_pyarrow() {
     python setup.py build_ext \
         --build-type=release --bundle-arrow-cpp \
         bdist_wheel --dist-dir ${WHEEL_DIR}
-    
+
     cd ${CURDIR}
     rm -rf ${TEMP_BUILD_DIR}
 }
 
 install_opencv() {
+    cd ${CURDIR}
+    TEMP_BUILD_DIR=$(mktemp -d)
+    cd ${TEMP_BUILD_DIR}
+    export OPENCV_VERSION=92
 
-export OPENCV_VERSION=92
-
-export ENABLE_HEADLESS=1
-git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
+    export ENABLE_HEADLESS=1
+    git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
     cd opencv-python && \
     if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
-    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
-    #python -m build --wheel --installer=uv --outdir ${WHEEL_DIR}
-    uv build --wheel --out-dir ${WHEEL_DIR}
+    uv build --wheel --out-dir ${WHEEL_DIR} && \
+    cd "$CURDIR" && \
+    rm -rf $TEMP_BUILD_DIR
+
 }
 
 install_numba() {
     cd ${CURDIR}
-    
+
     export NUMBA_VERSION=${NUMBA_VERSION:-$(grep -Eo '^numba.+;' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b' | tail -1)}
-    
+
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
 
@@ -261,20 +267,43 @@ install_llvmlite() {
 install_xgrammar() {
     cd ${CURDIR}
 
-    export XGRAMMAR_VERSION=$(grep -Eo '^xgrammar.+;' requirements/common.txt | grep -Eo '\b[0-9\.]+\b' | tail -1)
+    echo "========== Installing xgrammar =========="
+    export XGRAMMAR_VERSION="0.1.32"
+    echo "xgrammar version: ${XGRAMMAR_VERSION}"
 
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
 
-    : ================== Building xgrammar using gcc13  ==================
-    microdnf install -y gcc-toolset-13 && source /opt/rh/gcc-toolset-13/enable
+    echo "========== Using GCC 13 =========="
+    microdnf install -y gcc-toolset-13
+    source /opt/rh/gcc-toolset-13/enable
+
+    export CFLAGS="-fno-lto -mcpu=power9"
+    export CXXFLAGS="-fno-lto -mcpu=power9"
+    export LDFLAGS="-fno-lto"
+    export CMAKE_ARGS="-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF"
+
+    echo "========== Cloning xgrammar =========="
     git clone --recursive https://github.com/mlc-ai/xgrammar -b v${XGRAMMAR_VERSION}
+
     cd xgrammar
+
     cp cmake/config.cmake .
+
+    echo "========== Building wheel =========="
     uv build --wheel --out-dir ${WHEEL_DIR}
-    microdnf remove gcc-toolset-13 -y
+
+    echo "========== Installing wheel =========="
+    uv pip install ${WHEEL_DIR}/xgrammar*.whl
+
+    echo "========== Cleanup =========="
+    cd ${CURDIR}
+    rm -rf ${TEMP_BUILD_DIR}
+
+    microdnf remove gcc-toolset-13 -y || true
 }
 
+install_opencv
 install_torch_family
 install_pyarrow
 install_llvmlite
@@ -282,7 +311,6 @@ install_numba
 install_pillow
 install_pyzmq
 install_xgrammar
-install_opencv
 
 #wait $(jobs -p)
 
@@ -299,4 +327,3 @@ sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
 # sentencepiece.pc is in some pkgconfig inside uv cache
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
 uv pip install -r requirements/common.txt -r requirements/cpu.txt -r requirements/build.txt --index-strategy unsafe-best-match
-
