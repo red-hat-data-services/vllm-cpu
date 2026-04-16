@@ -53,7 +53,8 @@ model-hosting-container-standards >= 0.1.13, < 1.0.0
 mcp
 grpcio>=1.76.0
 grpcio-reflection>=1.76.0
-opentelemetry-sdk >= 1.27.0
-opentelemetry-api >= 1.27.0
-opentelemetry-exporter-otlp >= 1.27.0
-opentelemetry-semantic-conventions-ai >= 0.4.1
+# AIPCC-13600: opentelemetry causes runtime segfaults on s390x
+opentelemetry-sdk >= 1.27.0; platform_machine != "s390x"
+opentelemetry-api >= 1.27.0; platform_machine != "s390x"
+opentelemetry-exporter-otlp >= 1.27.0; platform_machine != "s390x"
+opentelemetry-semantic-conventions-ai >= 0.4.1; platform_machine != "s390x"
