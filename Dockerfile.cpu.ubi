@@ -75,7 +75,7 @@ ENV HF_HUB_OFFLINE=1 \
     TRITON_CACHE_DIR=/tmp/triton \
     VLLM_CACHE_ROOT=/tmp/vllm \
     VLLM_TARGET_DEVICE=cpu \
-    LD_PRELOAD=/lib64/libomp.so
+    LD_PRELOAD=/usr/lib64/libomp.so
 
 # setup non-root user for OpenShift
 RUN umask 002 && \
