@@ -92,7 +92,8 @@ class QuarkMoEMethod(FusedMoEMethodBase):
                 rocm_aiter_ops.is_fused_moe_enabled()
             )
             if (
-                input_config.get("dtype") == "fp8_e4m3"
+                input_config is not None
+                and input_config.get("dtype") == "fp8_e4m3"
                 and not input_config.get("is_dynamic")
                 and not emulate
             ):
@@ -764,7 +765,7 @@ class QuarkOCP_MX_MoEMethod(QuarkMoEMethod):
         if self.emulate:
             logger.warning_once(
                 f"The current mode (supports_mx={current_platform.supports_mx()}, "
-                f"use_mxfp4_aiter_moe={self.use_rocm_aiter_moe}, "
+                f"use_rocm_aiter_moe={self.use_rocm_aiter_moe}, "
                 f"ocp_mx_scheme={self.ocp_mx_scheme}) "
                 "does not support native MXFP4/MXFP6 "
                 "computation. Simulated weight dequantization and activation "
