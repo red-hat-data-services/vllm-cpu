@@ -126,7 +126,7 @@ uv pip compile \
     -c "${WORK_DIR}/vllm-constraints.txt" \
     --python-version 3.12 \
     --python-platform x86_64-manylinux_2_31 \
-    --extra-index-url https://download.pytorch.org/whl/cu129 \
+    --extra-index-url https://download.pytorch.org/whl/cu130 \
     --index-strategy unsafe-best-match \
     --unsafe-package setuptools \
     --unsafe-package ray \
