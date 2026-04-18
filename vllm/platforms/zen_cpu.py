@@ -3,6 +3,8 @@
 
 from typing import TYPE_CHECKING
 
+import torch
+
 from vllm.logger import init_logger
 from vllm.platforms.cpu import CpuPlatform
 from vllm.utils.torch_utils import is_torch_equal_or_newer
@@ -28,6 +30,12 @@ class ZenCpuPlatform(CpuPlatform):
     def is_zen_cpu(self) -> bool:
         # is_cpu() also returns True for this platform (inherited from CpuPlatform).
         return True
+
+    # Currently, AMD CPUs do not support float16 compute.
+    # Hence explicitly return bfloat16 and float32.
+    @property
+    def supported_dtypes(self) -> list[torch.dtype]:
+        return [torch.bfloat16, torch.float32]
 
     @classmethod
     def check_and_update_config(cls, vllm_config: "VllmConfig") -> None:
