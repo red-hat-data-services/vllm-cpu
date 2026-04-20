@@ -22,7 +22,6 @@ from vllm.entrypoints.chat_utils import (
     resolve_hf_chat_template,
     resolve_mistral_chat_template,
 )
-from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.logger import init_logger
 from vllm.platforms import current_platform
 from vllm.tokenizers.mistral import MistralTokenizer
