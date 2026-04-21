@@ -9,12 +9,12 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-comment: "^/build-konflux"
-    pipelinesascode.tekton.dev/on-target-branch: "[rhoai-2.25]"
+    pipelinesascode.tekton.dev/on-target-branch: "[rhoai-3.3]"
   labels:
     appstudio.openshift.io/application: automation
-    appstudio.openshift.io/component: pull-request-pipelines-odh-vllm-cpu-v2-25
+    appstudio.openshift.io/component: pull-request-pipelines-odh-vllm-cpu-v3-3
     pipelines.appstudio.openshift.io/type: build
-  name: odh-vllm-cpu-v2-25-on-pull-request
+  name: odh-vllm-cpu-v3-3-on-pull-request
   namespace: rhoai-tenant
 spec:
   timeouts:
