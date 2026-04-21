@@ -6,28 +6,36 @@ metadata:
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     build.appstudio.redhat.com/pull_request_number: "{{pull_request_number}}"
-    pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-comment: "^/(build-konflux|build-konflux-internal)"
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+    pipelinesascode.tekton.dev/on-comment: "^/build-konflux"
+    pipelinesascode.tekton.dev/on-target-branch: "[rhoai-2.25]"
   labels:
     appstudio.openshift.io/application: automation
-    appstudio.openshift.io/component: pull-request-pipelines-vllm-cpu-new
+    appstudio.openshift.io/component: pull-request-pipelines-odh-vllm-cpu-v2-25
     pipelines.appstudio.openshift.io/type: build
-  name: vllm-cpu-on-pull-request-940255
+  name: odh-vllm-cpu-v2-25-on-pull-request
   namespace: rhoai-tenant
 spec:
   timeouts:
     pipeline: 8h
-    tasks: 4h
+    tasks: 6h
   params:
-  - name: image-expires-after
-    value: 5d
   - name: git-url
     value: '{{source_url}}'
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/rhoai/pull-request-pipelines:vllm-cpu-{{revision}}
+    value: quay.io/rhoai/pull-request-pipelines:odh-vllm-cpu-{{revision}}
+  - name: additional-tags
+    value:
+    - 'pr-{{pull_request_number}}-into-{{target_branch}}'
+  - name: additional-labels
+    value:
+    - version=on-pr-{{revision}}
+    - io.openshift.tags=odh-vllm-cpu
+  - name: rhoai-version
+    value: "2.25.0"
   - name: dockerfile
     value: Dockerfile.konflux.cpu
   - name: path-context
@@ -35,40 +43,34 @@ spec:
   - name: hermetic
     value: false
   - name: build-source-image
-    value: false
+    value: true
   - name: build-image-index
     value: true
-  - name: rebuild
-    value: true
-  - name: skip-checks
-    value: true
-  - name: fetch-git-tags
-    value: true
-  - name: clone-depth
-    value: '2147483647'
   - name: build-platforms
     value:
     - linux/s390x
     - linux/ppc64le
+  - name: image-expires-after
+    value: 5d
   - name: enable-slack-failure-notification
     value: "false"
   taskRunSpecs:
-  - pipelineTaskName: ecosystem-cert-preflight-checks
-    computeResources:
-      requests:
-        cpu: '8'
-        memory: 16Gi
-      limits:
-        cpu: '16'
-        memory: 32Gi
-  - pipelineTaskName: clair-scan
-    computeResources:
-      requests:
-        cpu: '8'
-        memory: 16Gi
-      limits:
-        cpu: '16'
-        memory: 32Gi
+    - pipelineTaskName: ecosystem-cert-preflight-checks
+      computeResources:
+        requests:
+          cpu: '8'
+          memory: 16Gi
+        limits:
+          cpu: '16'
+          memory: 32Gi
+    - pipelineTaskName: clair-scan
+      computeResources:
+        requests:
+          cpu: '8'
+          memory: 16Gi
+        limits:
+          cpu: '16'
+          memory: 32Gi
   pipelineRef:
     resolver: git
     params:
