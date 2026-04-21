@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import ClassVar
 
 import torch
@@ -25,7 +26,7 @@ from vllm.v1.kv_cache_interface import AttentionSpec, CrossAttentionSpec
 
 logger = init_logger(__name__)
 
-_CPU_ARCH_PREFER_MIXED_BATCH = (CpuArchEnum.X86, CpuArchEnum.ARM)
+_CPU_ARCH_PREFER_MIXED_BATCH = (CpuArchEnum.X86, CpuArchEnum.ARM, CpuArchEnum.S390X)
 
 
 class CPUAttentionBackend(AttentionBackend):
@@ -35,10 +36,6 @@ class CPUAttentionBackend(AttentionBackend):
         torch.bfloat16,
         torch.float32,
     ]
-
-    @classmethod
-    def get_supported_dtypes(cls) -> list[torch.dtype]:
-        return [torch.float16, torch.bfloat16, torch.float32]
 
     @classmethod
     def get_supported_head_sizes(cls) -> list[int]:
@@ -174,7 +171,7 @@ class CPUAttentionMetadataBuilder(AttentionMetadataBuilder[CPUAttentionMetadata]
             query_start_loc = query_start_loc[: num_decodes + 1]
             block_table_tensor = block_table_tensor[:num_decodes]
 
-        sheduler_metadata = ops.cpu_attn_get_scheduler_metadata(
+        scheduler_metadata = ops.cpu_attn_get_scheduler_metadata(
             num_reqs=num_reqs,
             num_heads=self.num_heads,
             num_kv_heads=self.num_kv_heads,
@@ -197,7 +194,7 @@ class CPUAttentionMetadataBuilder(AttentionMetadataBuilder[CPUAttentionMetadata]
             seq_lens=seq_lens,
             block_table=block_table_tensor,
             slot_mapping=slot_mapping,
-            scheduler_metadata=sheduler_metadata,
+            scheduler_metadata=scheduler_metadata,
             causal=causal,
             use_sdpa_prefill=self.use_sdpa_prefill,
             num_decode_tokens=num_decode_tokens,
@@ -481,17 +478,41 @@ def _make_sliding_window_bias(
     return attn_biases
 
 
-def _get_attn_isa(dtype: torch.dtype, block_size: int, head_size: int | None = None) -> str:
+def _is_avx512_compiled() -> bool:
+    """Check if the _C extension was compiled with AVX512 support.
+
+    When built with VLLM_CPU_DISABLE_AVX512=true, the __AVX512F__ define
+    is absent and AVX512-only ops (like shm_allreduce) are not registered.
+    """
+    try:
+        torch.ops._C.shm_allreduce  # noqa: B018
+        return True
+    except AttributeError:
+        return False
+
+
+@lru_cache(maxsize=1)
+def _compiled_avx512() -> bool:
+    return _is_avx512_compiled()
+
+
+def _get_attn_isa(
+    dtype: torch.dtype, block_size: int, head_size: int | None = None
+) -> str:
     if head_size is not None and head_size % 32 != 0 and head_size % 16 == 0:
         return "vec16"
-    supports_amx = torch._C._cpu._is_amx_tile_supported()
+    supports_amx = (torch._C._cpu._is_amx_tile_supported()
+                    and _compiled_avx512())
     supports_arm = current_platform.get_cpu_architecture() == CpuArchEnum.ARM
+    supports_vxe = current_platform.get_cpu_architecture() == CpuArchEnum.S390X
     if supports_amx and dtype in (torch.bfloat16,) and block_size % 32 == 0:
         return "amx"
     elif block_size % 32 == 0:
         if supports_arm:
             # support ARM NEON FMLA and BFMMLA (bf16) for block size 32
             return "neon"
+        elif supports_vxe:
+            return "vxe"
         else:
             return "vec"
     else:

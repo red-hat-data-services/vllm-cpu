@@ -275,8 +275,8 @@ install_pyarrow() {
 TEMP_BUILD_DIR=$(mktemp -d)
 cd $TEMP_BUILD_DIR
 
-PYARROW_VERSION=$(curl -s https://api.github.com/repos/apache/arrow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9.]+")
-
+#PYARROW_VERSION=$(curl -s https://api.github.com/repos/apache/arrow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9.]+")
+PYARROW_VERSION="23.0.1"
 git clone --depth 1 https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
 
 cd arrow/cpp
