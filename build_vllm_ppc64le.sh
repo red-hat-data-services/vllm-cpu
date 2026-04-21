@@ -155,6 +155,7 @@ install_pyarrow() {
     cd ${CURDIR}
     
     export PYARROW_VERSION=${PYARROW_VERSION:-$(curl -s https://api.github.com/repos/apache/arrow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
+    PYARROW_VERSION=23.0.1 # pin version for rhoai-3.3
     
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
