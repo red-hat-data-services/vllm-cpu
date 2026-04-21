@@ -8,15 +8,15 @@ steps:
   - group: "Build Python wheels"
     key: "build-wheels"
     steps:
-      - label: "Build wheel - aarch64 - CUDA 12.9"
+      - label: "Build wheel - aarch64 - CUDA 13.0"
         depends_on: ~
-        id: build-wheel-arm64-cuda-12-9
+        id: build-wheel-arm64-cuda-13-0
         agents:
           queue: arm64_cpu_queue_postmerge
         commands:
           # #NOTE: torch_cuda_arch_list is derived from upstream PyTorch build files here:
           # https://github.com/pytorch/pytorch/blob/main/.ci/aarch64_linux/aarch64_ci_build.sh#L7
-          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=12.9.1 --build-arg torch_cuda_arch_list='8.7 8.9 9.0 10.0+PTX 12.0' --tag vllm-ci:build-image --target build --progress plain -f docker/Dockerfile ."
+          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=13.0 --build-arg torch_cuda_arch_list='8.7 8.9 9.0 10.0+PTX 12.0' --tag vllm-ci:build-image --target build --progress plain -f docker/Dockerfile ."
           - "mkdir artifacts"
           - "docker run --rm -v $(pwd)/artifacts:/artifacts_host vllm-ci:build-image bash -c 'cp -r dist /artifacts_host && chmod -R a+rw /artifacts_host'"
           - "bash .buildkite/scripts/upload-nightly-wheels.sh"
@@ -51,13 +51,13 @@ steps:
         env:
           DOCKER_BUILDKIT: "1"
 
-      - label: "Build wheel - x86_64 - CUDA 12.9"
+      - label: "Build wheel - x86_64 - CUDA 13.0"
         depends_on: ~
-        id: build-wheel-x86-cuda-12-9
+        id: build-wheel-x86-cuda-13-0
         agents:
           queue: cpu_queue_postmerge
         commands:
-          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=12.9.1 --tag vllm-ci:build-image --target build --progress plain -f docker/Dockerfile ."
+          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=13.0 --tag vllm-ci:build-image --target build --progress plain -f docker/Dockerfile ."
           - "mkdir artifacts"
           - "docker run --rm -v $(pwd)/artifacts:/artifacts_host vllm-ci:build-image bash -c 'cp -r dist /artifacts_host && chmod -R a+rw /artifacts_host'"
           - "bash .buildkite/scripts/upload-nightly-wheels.sh manylinux_2_31"
@@ -93,27 +93,27 @@ steps:
   - group: "Build release Docker images"
     key: "build-release-images"
     steps:
-      - label: "Build release image - x86_64 - CUDA 12.9"
+      - label: "Build release image - x86_64 - CUDA 13.0"
         depends_on: ~
         id: build-release-image-x86
         agents:
           queue: cpu_queue_postmerge
         commands:
           - "aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/q9t5s3a7"
-          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=12.9.1 --build-arg FLASHINFER_AOT_COMPILE=true --build-arg INSTALL_KV_CONNECTORS=true --tag public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-$(uname -m) --target vllm-openai --progress plain -f docker/Dockerfile ."
+          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=13.0 --build-arg FLASHINFER_AOT_COMPILE=true --build-arg INSTALL_KV_CONNECTORS=true --tag public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-$(uname -m) --target vllm-openai --progress plain -f docker/Dockerfile ."
           - "docker push public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-$(uname -m)"
           # re-tag to default image tag and push, just in case arm64 build fails
           - "docker tag public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-$(uname -m) public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT"
           - "docker push public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT"
 
-      - label: "Build release image - aarch64 - CUDA 12.9"
+      - label: "Build release image - aarch64 - CUDA 13.0"
         depends_on: ~
         id: build-release-image-arm64
         agents:
           queue: arm64_cpu_queue_postmerge
         commands:
           - "aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/q9t5s3a7"
-          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=12.9.1 --build-arg FLASHINFER_AOT_COMPILE=true --build-arg torch_cuda_arch_list='8.7 8.9 9.0 10.0+PTX 12.0' --build-arg INSTALL_KV_CONNECTORS=true --tag public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-$(uname -m) --target vllm-openai --progress plain -f docker/Dockerfile ."
+          - "DOCKER_BUILDKIT=1 docker build --build-arg max_jobs=16 --build-arg USE_SCCACHE=1 --build-arg GIT_REPO_CHECK=1 --build-arg CUDA_VERSION=13.0 --build-arg FLASHINFER_AOT_COMPILE=true --build-arg torch_cuda_arch_list='8.7 8.9 9.0 10.0+PTX 12.0' --build-arg INSTALL_KV_CONNECTORS=true --tag public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-$(uname -m) --target vllm-openai --progress plain -f docker/Dockerfile ."
           - "docker push public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-$(uname -m)"
 
       - label: "Build release image - x86_64 - CUDA 13.0"
@@ -163,7 +163,7 @@ steps:
         depends_on: ~
 
       - label: "Build release image - arm64 - CPU"
-        depends_on: 
+        depends_on:
           - block-arm64-cpu-release-image-build
           - input-release-version
         agents:
@@ -179,7 +179,7 @@ steps:
   - group: "Publish release images"
     key: "publish-release-images"
     steps:
-      - label: "Create multi-arch manifest - CUDA 12.9"
+      - label: "Create multi-arch manifest - CUDA 13.0"
         depends_on:
           - build-release-image-x86
           - build-release-image-arm64
@@ -191,7 +191,7 @@ steps:
           - "docker manifest create public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-x86_64 public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT-aarch64 --amend"
           - "docker manifest push public.ecr.aws/q9t5s3a7/vllm-release-repo:$BUILDKITE_COMMIT"
 
-      - label: "Annotate release workflow - CUDA 12.9"
+      - label: "Annotate release workflow - CUDA 13.0"
         depends_on:
           - create-multi-arch-manifest
         id: annotate-release-workflow
@@ -265,13 +265,13 @@ steps:
           queue: small_cpu_queue_postmerge
         commands:
           - "bash .buildkite/scripts/upload-release-wheels-pypi.sh"
-      
+
       - block: "Confirm update release images to DockerHub"
         key: block-update-release-images-dockerhub
         depends_on:
           - input-release-version
           - annotate-release-workflow
-      
+
       - label: "Publish release images to DockerHub"
         depends_on:
           - block-update-release-images-dockerhub
@@ -497,7 +497,7 @@ steps:
         # This fixes version detection when tags are moved/force-pushed
         echo "Fetching latest tags from origin..."
         git fetch --tags --force origin
-        
+
         # Log tag information for debugging version detection
         echo "========================================"
         echo "Git Tag Verification"
