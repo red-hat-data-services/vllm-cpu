@@ -11,11 +11,20 @@ from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from partial_json_parser.core.options import Allow
 
-from vllm.entrypoints.openai.engine.protocol import DeltaMessage, DeltaToolCall
+from vllm.entrypoints.openai.chat_completion.protocol import (
+    ChatCompletionRequest,
+)
+from vllm.entrypoints.openai.engine.protocol import (
+    DeltaMessage,
+    DeltaToolCall,
+    ExtractedToolCallInformation,
+)
 from vllm.tokenizers import TokenizerLike, get_tokenizer
 from vllm.tokenizers.detokenizer_utils import detokenize_incrementally
 from vllm.tokenizers.mistral import MistralTokenizer
 from vllm.tool_parsers.mistral_tool_parser import MistralToolParser
+
+_DUMMY_REQUEST = ChatCompletionRequest(messages=[], model="test")
 
 
 @pytest.fixture(scope="module")
@@ -203,6 +212,9 @@ def test_extract_tool_calls_no_tools(mistral_pre_v11_tool_parser):
         "single_tool_weather",
         "argument_before_name",
         "argument_before_name_and_name_in_argument",
+        "multiple_tools",
+        "content_before_tool",
+        "trailing_data_after_json",
     ],
     argnames=["model_output", "expected_tool_calls", "expected_content"],
     argvalues=[
@@ -261,6 +273,54 @@ def test_extract_tool_calls_no_tools(mistral_pre_v11_tool_parser):
             ],
             None,
         ),
+        (
+            """[TOOL_CALLS] [{"name": "add", "arguments": {"a": 3.5, "b": 4}}, {"name": "get_current_weather", "arguments":{"city": "San Francisco", "state": "CA", "unit": "celsius"}}]""",  # noqa: E501
+            [
+                ToolCall(
+                    function=FunctionCall(
+                        name="add", arguments=json.dumps({"a": 3.5, "b": 4})
+                    )
+                ),
+                ToolCall(
+                    function=FunctionCall(
+                        name="get_current_weather",
+                        arguments=json.dumps(
+                            {"city": "San Francisco", "state": "CA", "unit": "celsius"}
+                        ),
+                    )
+                ),
+            ],
+            None,
+        ),
+        (
+            """Hello[TOOL_CALLS] [{"name": "add", "arguments":{"a": 1, "b": 2}}]""",  # noqa: E501
+            [
+                ToolCall(
+                    function=FunctionCall(
+                        name="add", arguments=json.dumps({"a": 1, "b": 2})
+                    )
+                )
+            ],
+            "Hello",
+        ),
+        (
+            """[TOOL_CALLS] [{"name": "get_current_weather", "arguments":{"city": "Dallas", "state": "TX", "unit": "fahrenheit"}}]\nextra trailing data""",  # noqa: E501
+            [
+                ToolCall(
+                    function=FunctionCall(
+                        name="get_current_weather",
+                        arguments=json.dumps(
+                            {
+                                "city": "Dallas",
+                                "state": "TX",
+                                "unit": "fahrenheit",
+                            }
+                        ),
+                    )
+                )
+            ],
+            None,
+        ),
     ],
 )
 def test_extract_tool_calls_pre_v11_tokenizer(
@@ -274,6 +334,49 @@ def test_extract_tool_calls_pre_v11_tokenizer(
     assert_tool_calls(extracted_tool_calls.tool_calls, expected_tool_calls)
 
     assert extracted_tool_calls.content == expected_content
+
+
+def test_extract_tool_calls_pre_v11_multiple_bot_tokens_raises(
+    mistral_pre_v11_tool_parser,
+):
+    model_output = (
+        '[TOOL_CALLS] [{"name": "add", "arguments":{"a": 1}}]'
+        '[TOOL_CALLS] [{"name": "sub", "arguments":{"b": 2}}]'
+    )
+    with pytest.raises(ValueError, match="Only one BOT token"):
+        mistral_pre_v11_tool_parser.extract_tool_calls(
+            model_output, request=_DUMMY_REQUEST
+        )
+
+
+def test_extract_tool_calls_pre_v11_regex_fallback(
+    mistral_pre_v11_tool_parser,
+):
+    """The regex fallback path finds valid JSON via regex when the primary
+    raw_decode fails on leading junk. It should re-serialize arguments
+    and return a valid tool call."""
+    model_output = (
+        '[TOOL_CALLS]  junk [{"name": "add", "arguments":{"a": 1, "b": 2}}] trail'
+    )
+    result = mistral_pre_v11_tool_parser.extract_tool_calls(
+        model_output, request=_DUMMY_REQUEST
+    )
+    assert result.tools_called
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].function.name == "add"
+    assert result.tool_calls[0].function.arguments == json.dumps({"a": 1, "b": 2})
+
+
+def test_extract_tool_calls_pre_v11_regex_fallback_fails(
+    mistral_pre_v11_tool_parser,
+):
+    model_output = "[TOOL_CALLS] not json at all"
+    result = mistral_pre_v11_tool_parser.extract_tool_calls(
+        model_output, request=_DUMMY_REQUEST
+    )
+    assert result == ExtractedToolCallInformation(
+        tools_called=False, tool_calls=[], content="not json at all"
+    )
 
 
 @pytest.mark.parametrize(
@@ -452,6 +555,7 @@ def _test_extract_tool_calls_streaming(
         "argument_before_name",
         "argument_before_name_and_name_in_argument",
         "multiple_tools",
+        "trailing_data_after_json",
     ],
     argnames=["model_output", "expected_tool_calls", "expected_content"],
     argvalues=[
@@ -540,6 +644,24 @@ def _test_extract_tool_calls_streaming(
                 ),
             ],
             "",
+        ),
+        (
+            """[TOOL_CALLS] [{"name": "get_current_weather", "arguments":{"city": "Dallas", "state": "TX", "unit": "fahrenheit"}}]\nextra trailing data""",  # noqa: E501
+            [
+                ToolCall(
+                    function=FunctionCall(
+                        name="get_current_weather",
+                        arguments=json.dumps(
+                            {
+                                "city": "Dallas",
+                                "state": "TX",
+                                "unit": "fahrenheit",
+                            }
+                        ),
+                    )
+                )
+            ],
+            "\nextra trailing data",
         ),
     ],
 )
