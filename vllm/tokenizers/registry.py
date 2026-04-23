@@ -148,17 +148,7 @@ def resolve_tokenizer_args(
             allow_patterns=allow_patterns,
             revision=revision,
         )
-        has_consolidated_safetensors = (
-            len(
-                list_filtered_repo_files(
-                    model_name_or_path=str(tokenizer_name),
-                    allow_patterns=["consolidated*.safetensors"],
-                    revision=revision,
-                )
-            )
-            > 0
-        )
-        if len(files_list) > 0 and has_consolidated_safetensors:
+        if len(files_list) > 0:
             tokenizer_mode = "mistral"
 
     # Fallback to HF tokenizer
