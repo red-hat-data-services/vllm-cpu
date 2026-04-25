@@ -38,7 +38,9 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 
 cd ${CURDIR}
 
-git clone https://github.com/apache/arrow.git
+# Pin to 23.0.1 — keep in sync with ppc64le; Arrow 24+ removed setup.py
+export PYARROW_VERSION=${PYARROW_VERSION:-"23.0.1"}
+git clone https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
 cd arrow/cpp
 mkdir -p release
 cd release
