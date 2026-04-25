@@ -130,11 +130,12 @@ install_torch_family() {
 install_pyarrow() {
     cd ${CURDIR}
     
-    export PYARROW_VERSION=${PYARROW_VERSION:-$(curl -s https://api.github.com/repos/apache/arrow/releases/latest | jq -r '.tag_name' | grep -Eo "[0-9\.]+")}
-    
+    # Pin to 23.0.1 — Arrow 24+ removed setup.py in favor of pyproject.toml/meson build
+    export PYARROW_VERSION=${PYARROW_VERSION:-"23.0.1"}
+
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
-    
+
     : ================== Installing Pyarrow ==================
     git clone --recursive https://github.com/apache/arrow.git -b apache-arrow-${PYARROW_VERSION}
     cd arrow/cpp
