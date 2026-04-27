@@ -297,7 +297,7 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 export CMAKE_ARGS="-DPython3_EXECUTABLE=/opt/vllm/bin/python"
 
 
-pip install libcst==1.8.6
+uv pip install libcst==1.8.6
 uv pip install -r requirements-wheel-build.txt \
     --extra-index-url "$IBM_DEVPI_URL" \
     --index-strategy unsafe-best-match \
