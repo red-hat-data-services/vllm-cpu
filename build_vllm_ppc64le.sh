@@ -105,7 +105,6 @@ try_install_from_devpi() {
 
 cd /root
 LAPACK_VERSION=$(curl -s https://api.github.com/repos/Reference-LAPACK/lapack/releases/latest | jq -r '.tag_name' | sed 's/v//')
-
 git clone --depth 1 https://github.com/Reference-LAPACK/lapack.git -b v${LAPACK_VERSION}
 cd lapack
 cmake -B build -S .
@@ -298,6 +297,7 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 export CMAKE_ARGS="-DPython3_EXECUTABLE=/opt/vllm/bin/python"
 
 
+pip install libcst==1.8.6
 uv pip install -r requirements-wheel-build.txt \
     --extra-index-url "$IBM_DEVPI_URL" \
     --index-strategy unsafe-best-match \
