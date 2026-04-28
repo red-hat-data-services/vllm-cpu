@@ -49,7 +49,7 @@ python --version
 # install build tools (stable uv)
 ########################################
 
-pip install -U pip
+pip install -U pip setuptools-rust
 pip install "uv==0.4.30"
 pip install "setuptools<70" build wheel cmake auditwheel
 uv pip install "setuptools<70" cython meson-python --no-build-isolation
@@ -105,7 +105,6 @@ try_install_from_devpi() {
 
 cd /root
 LAPACK_VERSION=$(curl -s https://api.github.com/repos/Reference-LAPACK/lapack/releases/latest | jq -r '.tag_name' | sed 's/v//')
-
 git clone --depth 1 https://github.com/Reference-LAPACK/lapack.git -b v${LAPACK_VERSION}
 cd lapack
 cmake -B build -S .
@@ -290,14 +289,23 @@ cmake -DCMAKE_BUILD_TYPE=release \
 make install -j ${MAX_JOBS}
 
 cd ../../python
+export PYARROW_BUNDLE_ARROW_CPP=1
+export PATH=/opt/vllm/bin:$PATH
+export ARROW_HOME=/usr/local
+export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
+export CMAKE_ARGS="-DPython3_EXECUTABLE=/opt/vllm/bin/python"
+
+
+uv pip install libcst==1.8.6
 uv pip install -r requirements-wheel-build.txt \
     --extra-index-url "$IBM_DEVPI_URL" \
     --index-strategy unsafe-best-match \
     --no-build-isolation
 
-python setup.py build_ext \
---build-type=release --bundle-arrow-cpp \
-bdist_wheel --dist-dir ${WHEEL_DIR}
+pip install "cython>=3.1"
+
+python -m build --wheel --outdir ${WHEEL_DIR} --no-isolation
 
 cd "$REPO_ROOT"
 rm -rf $TEMP_BUILD_DIR
