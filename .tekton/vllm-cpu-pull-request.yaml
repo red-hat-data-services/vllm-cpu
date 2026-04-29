@@ -46,6 +46,8 @@ spec:
     value: true
   - name: clone-depth
     value: '2147483647'
+  - name: rhoai-version
+    value: "main"
   - name: build-platforms
     value:
     - linux/s390x
