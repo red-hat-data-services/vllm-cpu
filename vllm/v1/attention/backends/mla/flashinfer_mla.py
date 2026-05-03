@@ -223,37 +223,6 @@ class FlashInferMLAImpl(MLACommonImpl[MLACommonMetadata]):
                 )
             out_kwargs["out"] = self._decode_out[:B]
 
-        # Reuse pre-allocated zero-init output buffer to avoid a memset
-        # kernel on every CUDA graph replay.
-        # q is 4D: (batch, q_len_per_req, num_heads, head_dim)
-        # FlashInfer has a bug where out= validation hardcodes 3D shape
-        # (batch, num_heads, kv_lora_rank), but the kernel writes 4D
-        # (batch, q_len, num_heads, kv_lora_rank) when q_len > 1.
-        # So we can only pass out= for single-token decode (q_len == 1).
-        # For q_len > 1, we zero padding slots after the kernel returns.
-        # TODO: upstream fix to FlashInfer
-        B, q_len_per_req = q.shape[0], q.shape[1]
-        out_kwargs: dict[str, torch.Tensor] = {}
-        if q_len_per_req == 1:
-            dtype = (
-                torch.bfloat16
-                if is_quantized_kv_cache(self.kv_cache_dtype)
-                else q.dtype
-            )
-            if (
-                self._decode_out is None
-                or self._decode_out.shape[0] < B
-                or self._decode_out.dtype != dtype
-            ):
-                self._decode_out = torch.zeros(
-                    B,
-                    q.shape[2],
-                    self.kv_lora_rank,
-                    dtype=dtype,
-                    device=q.device,
-                )
-            out_kwargs["out"] = self._decode_out[:B]
-
         o = trtllm_batch_decode_with_kv_cache_mla(
             query=q,
             kv_cache=kv_c_and_k_pe_cache.unsqueeze(1),
