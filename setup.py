@@ -814,7 +814,7 @@ def _is_xpu() -> bool:
 
 
 def _build_custom_ops() -> bool:
-    return _is_cuda() or _is_hip()
+    return _is_cuda() or _is_hip() or _is_cpu()
 
 
 def get_rocm_version():
