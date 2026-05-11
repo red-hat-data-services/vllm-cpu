@@ -323,7 +323,7 @@ cd $TEMP_BUILD_DIR
 #NUMBA_VERSION=$(grep -Eo '^numba.+;' $REPO_ROOT/requirements/cpu.txt | grep -Eo '[0-9.]+' | tail -1)
 NUMBA_VERSION=$(grep 'numba' "$REPO_ROOT/requirements/cpu.txt" | \
     sed -E 's/.*numba *== *([0-9.]+).*/\1/' | \
-    head -1)
+    tail -1)
 git clone --depth 1 https://github.com/numba/numba.git -b ${NUMBA_VERSION}
 
 cd numba
