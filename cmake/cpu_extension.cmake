@@ -365,10 +365,7 @@ if (ASIMD_FOUND AND NOT APPLE_SILICON_FOUND)
             ${VLLM_EXT_SRC})
         add_compile_definitions(-DCPU_CAPABILITY_AVX512)
     endif()
-elseif(POWER10_FOUND OR POWER9_FOUND)
-    set(VLLM_EXT_SRC
-        "csrc/cpu/quant.cpp"
-        ${VLLM_EXT_SRC})
+
 endif()
 
 if(USE_ONEDNN)
