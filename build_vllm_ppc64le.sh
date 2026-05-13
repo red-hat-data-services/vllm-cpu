@@ -296,7 +296,6 @@ export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 export CMAKE_ARGS="-DPython3_EXECUTABLE=/opt/vllm/bin/python"
 
-
 uv pip install libcst==1.8.6
 uv pip install -r requirements-wheel-build.txt \
     --extra-index-url "$IBM_DEVPI_URL" \
