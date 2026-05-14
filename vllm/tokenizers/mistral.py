@@ -15,8 +15,15 @@ from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     SpecialTokens,
+    Tokenizer,
 )
-from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
+from mistral_common.tokens.tokenizers.instruct import (
+    InstructTokenizerBase,
+    InstructTokenizerV13,
+)
+from mistral_common.tokens.tokenizers.mistral import (
+    MistralTokenizer as MistralCommonTokenizer,
+)
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
 )
@@ -26,20 +33,19 @@ from pydantic import ValidationError
 from vllm.entrypoints.chat_utils import ChatCompletionMessageParam
 from vllm.entrypoints.openai.chat_completion.protocol import ChatCompletionRequest
 from vllm.logger import init_logger
+from vllm.tokenizers.protocol import TokenizerLike
 
-from .protocol import TokenizerLike
+try:
+    # Transformers v5
+    from transformers.tokenization_mistral_common import MistralCommonBackend
+except ImportError:
+    # Transformers v4
+    from transformers.tokenization_mistral_common import (
+        MistralCommonTokenizer as MistralCommonBackend,
+    )
 
 if TYPE_CHECKING:
     from transformers import BatchEncoding
-
-    try:
-        # Transformers v5
-        from transformers.tokenization_mistral_common import MistralCommonBackend
-    except ImportError:
-        # Transformers v4
-        from transformers.tokenization_mistral_common import (
-            MistralCommonTokenizer as MistralCommonBackend,
-        )
 
 logger = init_logger(__name__)
 
@@ -235,15 +241,6 @@ class MistralTokenizer(TokenizerLike):
         download_dir: str | None = None,
         **kwargs,
     ) -> "MistralTokenizer":
-        try:
-            # Transformers v5
-            from transformers.tokenization_mistral_common import MistralCommonBackend
-        except ImportError:
-            # Transformers v4
-            from transformers.tokenization_mistral_common import (
-                MistralCommonTokenizer as MistralCommonBackend,
-            )
-
         tokenizer = MistralCommonBackend.from_pretrained(
             path_or_repo_id,
             *args,
@@ -255,13 +252,13 @@ class MistralTokenizer(TokenizerLike):
 
         return cls(tokenizer)
 
-    def __init__(self, tokenizer: "MistralCommonBackend") -> None:
+    def __init__(self, tokenizer: MistralCommonBackend) -> None:
         super().__init__()
 
-        self.transformers_tokenizer = tokenizer
-        self.mistral = tokenizer.tokenizer
-        self.instruct = self.mistral.instruct_tokenizer
-        self.tokenizer = self.instruct.tokenizer
+        self.transformers_tokenizer: MistralCommonBackend = tokenizer
+        self.mistral: MistralCommonTokenizer = tokenizer.tokenizer
+        self.instruct: InstructTokenizerBase = self.mistral.instruct_tokenizer
+        self.tokenizer: Tokenizer = self.instruct.tokenizer
 
         mode = self.mistral._chat_completion_request_validator._mode
         if mode != ValidationMode.test:
@@ -435,7 +432,9 @@ class MistralTokenizer(TokenizerLike):
         # NOTE: This is for backward compatibility.
         # Transformers should be passed arguments it knows.
         if self.version >= 15:
-            version_kwargs["reasoning_effort"] = kwargs.get("reasoning_effort")
+            _reasoning_effort = kwargs.get("reasoning_effort")
+            if _reasoning_effort is not None:
+                version_kwargs["reasoning_effort"] = _reasoning_effort
 
         messages, tools = _prepare_apply_chat_template_tools_and_messages(
             messages, tools, continue_final_message, add_generation_prompt
@@ -483,7 +482,11 @@ class MistralTokenizer(TokenizerLike):
         return self.transformers_tokenizer.convert_tokens_to_ids(tokens)
 
     def convert_tokens_to_string(self, tokens: list[str]) -> str:
-        to_decode_special_tokens = {SpecialTokens.tool_calls}
+        to_decode_special_tokens = {
+            SpecialTokens.tool_calls,
+            SpecialTokens.begin_think,
+            SpecialTokens.end_think,
+        }
         if self.is_tekken:
             assert isinstance(self.tokenizer, Tekkenizer), type(self.tokenizer)
             tokens = [

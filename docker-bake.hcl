@@ -64,8 +64,8 @@ target "cuda" {
   dockerfile = "Dockerfile.ubi"
 
   args = {
-    CUDA_MAJOR =  "12"
-    CUDA_MINOR =  "9"
+    CUDA_MAJOR =  "13"
+    CUDA_MINOR =  "0"
   }
 
   tags = [
