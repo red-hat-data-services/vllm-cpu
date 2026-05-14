@@ -37,11 +37,23 @@ RUN microdnf install -y \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip python${PYTHON_VERSION}-wheel  && \
     python${PYTHON_VERSION} -m venv $VIRTUAL_ENV && pip install --no-cache -U pip wheel uv && microdnf clean all
 
+FROM python-install AS rust
+ENV CARGO_HOME=/root/.cargo
+ENV RUSTUP_HOME=/root/.rustup
+ENV PATH="$CARGO_HOME/bin:$RUSTUP_HOME/bin:$PATH"
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
+    . "$CARGO_HOME/env" && \
+    rustup default stable && \
+    rustup show
+
 FROM python-install AS pyarrow
 
 # Build Apache Arrow
 WORKDIR /tmp
 RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,from=rust,source=/root/.cargo,target=/root/.cargo,rw \
+    --mount=type=bind,from=rust,source=/root/.rustup,target=/root/.rustup,rw \
     git clone https://github.com/apache/arrow.git && \
     cd arrow/cpp && \
     mkdir release && cd release && \
@@ -62,11 +74,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
           .. && \
     make -j$(nproc) && \
     make install && \
-    cd ../../python && \
+    ls /tmp/arrow/ && \
+    ls /tmp/arrow/python 2>/dev/null || echo "python dir not found" && \
+    export CARGO_HOME=/root/.cargo && \
+    export RUSTUP_HOME=/root/.rustup && \
+    export PATH="/root/.cargo/bin:/root/.rustup/bin:$PATH" && \
+    cd /tmp/arrow/python && \
     export PYARROW_PARALLEL=4 && \
     export ARROW_BUILD_TYPE=release && \
     uv pip install -r requirements-build.txt && \
-    python setup.py build_ext --build-type=$ARROW_BUILD_TYPE --bundle-arrow-cpp bdist_wheel
+    pip wheel . --no-deps -w dist
 
 FROM python-install AS numa-build
 # Install numactl (needed for numa.h dependency)
@@ -80,16 +97,6 @@ RUN curl -LO https://github.com/numactl/numactl/archive/refs/tags/v2.0.16.tar.gz
 
 # Set include path
 ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
-
-FROM python-install AS rust
-ENV CARGO_HOME=/root/.cargo
-ENV RUSTUP_HOME=/root/.rustup
-ENV PATH="$CARGO_HOME/bin:$RUSTUP_HOME/bin:$PATH"
-
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-    . "$CARGO_HOME/env" && \
-    rustup default stable && \
-    rustup show
 
 FROM python-install AS torch-vision
 # Install torchvision
@@ -133,7 +140,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     git clone --recursive https://github.com/numba/llvmlite.git -b v0.44.0 && \
     git clone --recursive https://github.com/numba/numba.git -b ${NUMBA_VERSION} && \
     cd llvm-project && mkdir build && cd  build && \
-    uv pip install 'cmake<4' setuptools numpy && \
+    uv pip install 'cmake<4' 'setuptools<69' numpy && \
     export PREFIX=/usr/local && CMAKE_ARGS="${CMAKE_ARGS} -DLLVM_ENABLE_PROJECTS=lld;libunwind;compiler-rt" \
     CFLAGS="$(echo $CFLAGS | sed 's/-fno-plt //g')" \
     CXXFLAGS="$(echo $CXXFLAGS | sed 's/-fno-plt //g')" \

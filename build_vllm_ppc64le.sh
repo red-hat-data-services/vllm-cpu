@@ -296,6 +296,7 @@ export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 export CMAKE_ARGS="-DPython3_EXECUTABLE=/opt/vllm/bin/python"
 
+
 uv pip install libcst==1.8.6
 uv pip install -r requirements-wheel-build.txt \
     --extra-index-url "$IBM_DEVPI_URL" \
@@ -322,7 +323,7 @@ cd $TEMP_BUILD_DIR
 #NUMBA_VERSION=$(grep -Eo '^numba.+;' $REPO_ROOT/requirements/cpu.txt | grep -Eo '[0-9.]+' | tail -1)
 NUMBA_VERSION=$(grep 'numba' "$REPO_ROOT/requirements/cpu.txt" | \
     sed -E 's/.*numba *== *([0-9.]+).*/\1/' | \
-    head -1)
+    tail -1)
 git clone --depth 1 https://github.com/numba/numba.git -b ${NUMBA_VERSION}
 
 cd numba
