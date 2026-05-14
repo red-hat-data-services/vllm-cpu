@@ -66,8 +66,8 @@ WORKDIR /workspace
 ENV VIRTUAL_ENV=/opt/vllm
 ENV PATH=$VIRTUAL_ENV/bin:$PATH
 
-# Required for triton
-RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs gcc rsync && \
+# Required for triton (gcc, rsync) and audio multimodal support (libsndfile)
+RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs gcc rsync libsndfile && \
     microdnf clean all
 
 RUN --mount=type=cache,target=/root/.cache/uv \
