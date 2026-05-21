@@ -506,24 +506,6 @@ def _make_sliding_window_bias(
     return attn_biases
 
 
-def _is_avx512_compiled() -> bool:
-    """Check if the _C extension was compiled with AVX512 support.
-
-    When built with VLLM_CPU_DISABLE_AVX512=true, the __AVX512F__ define
-    is absent and AVX512-only ops (like shm_allreduce) are not registered.
-    """
-    try:
-        torch.ops._C.shm_allreduce  # noqa: B018
-        return True
-    except AttributeError:
-        return False
-
-
-@lru_cache(maxsize=1)
-def _compiled_avx512() -> bool:
-    return _is_avx512_compiled()
-
-
 def _get_attn_isa(
     dtype: torch.dtype,
     block_size: int,
