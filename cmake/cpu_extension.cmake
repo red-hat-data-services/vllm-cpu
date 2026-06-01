@@ -31,25 +31,15 @@ else()
         "-fopenmp"
         "-DVLLM_CPU_EXTENSION")
 
-    # locate PyTorch's libgomp (e.g. site-packages/torch.libs/libgomp-947d5fa1.so.1.0.0)
-    # and create a local shim dir with it. When PyTorch is built from source or packaged
-    # by a distro (common on RISC-V, s390x, Fedora/RHEL aarch64), no vendored libgomp
-    # exists and the shim dir is empty; fall back to the system libgomp in that case.
-    vllm_prepare_torch_gomp_shim(VLLM_TORCH_GOMP_SHIM_DIR)
-
-    if(VLLM_TORCH_GOMP_SHIM_DIR)
-        find_library(OPEN_MP
-            NAMES gomp
-            PATHS "${VLLM_TORCH_GOMP_SHIM_DIR}"
-            NO_DEFAULT_PATH
-            REQUIRED
-        )
-        # Use the same libgomp as PyTorch at runtime
-        set(ENV{LD_LIBRARY_PATH} "${VLLM_TORCH_GOMP_SHIM_DIR}:$ENV{LD_LIBRARY_PATH}")
-    else()
-        # Fall back to system / toolchain libgomp
-        find_library(OPEN_MP NAMES gomp REQUIRED)
-    endif()
+    # Always use the system libgomp from the RHEL 9 base image instead of the
+    # copy vendored inside the torch wheel. The vendored libgomp can mismatch the
+    # system toolchain; HINTS points find_library at the compiler's implicit link
+    # directories (e.g. gcc-toolset-14) so the system libgomp is located.
+    find_library(OPEN_MP
+        NAMES gomp
+        HINTS ${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}
+        REQUIRED
+    )
 endif()
 
 if (NOT MACOSX_FOUND)
