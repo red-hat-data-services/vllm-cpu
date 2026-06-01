@@ -57,7 +57,8 @@ ENV VIRTUAL_ENV=/opt/vllm
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 ENV PYTHON_VERSION=${PYTHON_VERSION}
 RUN microdnf install -y \
-    python${PYTHON_VERSION}-devel  && \
+    python${PYTHON_VERSION}-devel \
+    python${PYTHON_VERSION}-test  && \
     python${PYTHON_VERSION} -m venv $VIRTUAL_ENV && \
     pip install --no-cache -U pip wheel uv && \
     microdnf clean all
@@ -96,6 +97,7 @@ ENV HF_HUB_OFFLINE=1 \
     HOME=/home/vllm \
     VLLM_USAGE_STATS_SERVER=https://console.redhat.com/api/rhaiis-stats \
     VLLM_USAGE_SOURCE=quay-docker-image \
+    VLLM_WORKER_MULTIPROC_METHOD=fork \
     OUTLINES_CACHE_DIR=/tmp/outlines \
     NUMBA_CACHE_DIR=/tmp/numba \
     TRITON_CACHE_DIR=/tmp/triton \
