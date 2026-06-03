@@ -23,7 +23,7 @@ fi
 # install system dependencies
 ########################################
 
-rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm || true
 
 microdnf install -y \
     python3.12 python3.12-devel python3.12-pip gcc \
@@ -31,7 +31,7 @@ microdnf install -y \
     automake libtool clang-devel openssl-devel freetype-devel fribidi-devel \
     harfbuzz-devel kmod lcms2-devel libimagequant-devel libjpeg-turbo-devel \
     llvm15-devel libraqm-devel libtiff-devel libwebp-devel libxcb-devel \
-    ninja-build openjpeg2-devel pkgconfig protobuf* \
+    ninja-build openjpeg2-devel pkgconfig \
     tcl-devel tk-devel xsimd-devel zeromq-devel zlib-devel patchelf file
 
 ########################################
@@ -50,7 +50,7 @@ python --version
 ########################################
 
 pip install -U pip setuptools-rust
-pip install "uv==0.4.30"
+pip install uv
 pip install "setuptools<70" build wheel cmake auditwheel
 uv pip install "setuptools<70" cython meson-python --no-build-isolation
 
@@ -144,19 +144,84 @@ make install
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib64:/usr/local/lib
 
 ########################################
+# PROTOBUF
+########################################
+
+git clone https://github.com/protocolbuffers/protobuf.git
+cd protobuf
+git checkout v25.8
+git submodule update --init --recursive
+mkdir build && cd build
+
+cmake .. \
+  -DCMAKE_BUILD_TYPE=Release \
+  -Dprotobuf_BUILD_TESTS=OFF \
+  -Dprotobuf_BUILD_SHARED_LIBS=ON \
+  -Dprotobuf_ABSL_PROVIDER=module \
+  -DABSL_ENABLE_INSTALL=OFF \
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  -DCMAKE_CXX_FLAGS="-O2 -fPIC -mcmodel=medium" \
+  -DCMAKE_INSTALL_PREFIX=/usr/local
+
+make -j$(nproc)
+make install
+ldconfig
+
+export CMAKE_PREFIX_PATH=/usr/local:${CMAKE_PREFIX_PATH:-}
+export LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:${LD_LIBRARY_PATH:-}
+
+########################################
+# ABSEIL CPP
+########################################
+
+# git clone https://github.com/abseil/abseil-cpp.git
+# cd abseil-cpp
+# mkdir build && cd build
+
+# cmake .. \
+#   -DCMAKE_BUILD_TYPE=Release \
+#   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+#   -DCMAKE_CXX_STANDARD=17 \
+#   -DCMAKE_INSTALL_PREFIX=/usr/local \
+#   -DCMAKE_CXX_FLAGS="-fPIC -mcmodel=medium"
+
+# make -j$(nproc)
+# make install
+
+########################################
 # PYTORCH FAMILY
 ########################################
 
 install_torch_family() {
 
     cd "$REPO_ROOT"
-    export TORCH_VERSION=2.10.0
-    TORCH_VERSION=${TORCH_VERSION:-$(grep -E '^torch==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
-    echo "Torch version: $TORCH_VERSION"
-    TORCHVISION_VERSION=0.24.1
-    export TORCHVISION_VERSION=${TORCHVISION_VERSION:-$(grep -E '^torchvision==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
-    TORCHAUDIO_VERSION=2.9.1
-    export TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$(grep -E '^torchaudio==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
+    TORCH_VERSION=${TORCH_VERSION:-$(grep -E '^torch==.+==\s*"ppc64le"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
+    TORCH_VERSION=${TORCH_VERSION:-2.11.0}
+    export TORCH_VERSION
+
+    TORCHVISION_VERSION=${TORCHVISION_VERSION:-0.26.0}
+    export TORCHVISION_VERSION
+
+    TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$TORCH_VERSION}
+    export TORCHAUDIO_VERSION
+
+    echo "Torch version      : $TORCH_VERSION"
+    echo "Torchvision version: $TORCHVISION_VERSION"
+    echo "Torchaudio version : $TORCHAUDIO_VERSION"
+
+    echo "========== Installing SymPy =========="
+    uv pip install \
+        --extra-index-url "$IBM_DEVPI_URL" \
+        --index-strategy unsafe-best-match \
+        "sympy>=1.13.3"
+
+    echo "========== Installing Torch from DevPI =========="
+    try_install_from_devpi "torch==${TORCH_VERSION}"
+
+    echo "========== Installing Torchvision from DevPI =========="
+    try_install_from_devpi "torchvision==${TORCHVISION_VERSION}"
+
+    echo "Torch and Torchvision installed from DevPI"
 
     TEMP_BUILD_DIR=$(mktemp -d)
     cd ${TEMP_BUILD_DIR}
@@ -174,36 +239,42 @@ install_torch_family() {
 
     : ================== Installing Pytorch ==================
     export _GLIBCXX_USE_CXX11_ABI=1
-    git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
-    cd pytorch
-    sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
-    uv pip install -r requirements.txt \
-       --extra-index-url "$IBM_DEVPI_URL" \
-       --index-strategy unsafe-best-match \
-       --no-build-isolation
-    python setup.py develop
-    rm -f dist/torch*+git*whl
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
+    # git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
+    # cd pytorch
+    # sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
+    # uv pip install -r requirements.txt \
+    #    --extra-index-url "$IBM_DEVPI_URL" \
+    #    --index-strategy unsafe-best-match \
+    #    --no-build-isolation
+    # python setup.py develop
+    # rm -f dist/torch*+git*whl
+    # MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+    # PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
 
-    cd ${TEMP_BUILD_DIR}
+    # cd ${TEMP_BUILD_DIR}
 
     : ================== Installing Torchvision ==================
-    export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
-    git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
-    cd vision
-    uv pip install standard-pkg-resources --no-build-isolation
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    BUILD_VERSION=${TORCHVISION_VERSION} \
-    uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+    # export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
+    # git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
+    # cd vision
+    # uv pip install standard-pkg-resources --no-build-isolation
+    # MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+    # BUILD_VERSION=${TORCHVISION_VERSION} \
+    # uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
 
-    cd ${TEMP_BUILD_DIR}
+    # cd ${TEMP_BUILD_DIR}
 
     : ================== Installing Torchaudio ==================
     export BUILD_SOX=1 BUILD_KALDI=1 BUILD_RNNT=1 USE_FFMPEG=0 USE_ROCM=0 USE_CUDA=0
     export TORCHAUDIO_TEST_ALLOW_SKIP_IF_NO_FFMPEG=1
     git clone --recursive https://github.com/pytorch/audio.git -b v${TORCHAUDIO_VERSION}
     cd audio
+    #patching 
+    sed -i '
+    s|_CSRC_DIR / "_torchaudio.cpp"|str(_CSRC_DIR / "_torchaudio.cpp")|;
+    s|_CSRC_DIR / "utils.cpp"|str(_CSRC_DIR / "utils.cpp")|;
+    s|sources=\[_CSRC_DIR / s for s in sources\]|sources=[str(_CSRC_DIR / s) for s in sources]|;
+    ' tools/setup_helpers/extension.py
     MAX_JOBS=${MAX_JOBS:-$(nproc)} \
     BUILD_VERSION=${TORCHAUDIO_VERSION} \
     uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
@@ -217,49 +288,54 @@ install_torch_family() {
 
 # TODO(): figure out exact llvmlite version needed by numba
 install_llvmlite() {
+    curl -L -o ${WHEEL_DIR}/llvmlite-0.47.0-2-cp312-cp312-linux_ppc64le.whl   https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.5-EA1/cpu-ubi9-test/llvmlite-0.47.0-2-cp312-cp312-linux_ppc64le.whl
+    # uv pip install "https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.5-EA2/cpu-ubi9-test/llvmlite-0.47.0-2-cp312-cp312-linux_ppc64le.whl"
+    # if try_install_from_devpi llvmlite==0.44.0; then
+    #    return
+    # fi
 
-    if try_install_from_devpi llvmlite==0.44.0; then
-       return
-    fi
+    # TEMP_BUILD_DIR=$(mktemp -d)
+    # cd $TEMP_BUILD_DIR
 
-    TEMP_BUILD_DIR=$(mktemp -d)
-    cd $TEMP_BUILD_DIR
+    # export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
 
-    export LLVMLITE_VERSION=${LLVMLITE_VERSION:-0.44.0}
+    # TEMP_BUILD_DIR=$(mktemp -d)
+    # cd ${TEMP_BUILD_DIR}
 
-    TEMP_BUILD_DIR=$(mktemp -d)
-    cd ${TEMP_BUILD_DIR}
+    # : ================== Installing Llvmlite ==================
+    # git clone --recursive https://github.com/numba/llvmlite.git -b v${LLVMLITE_VERSION}
+    # cd llvmlite
+    # echo "setuptools<70.0.0" > build_constraints.txt
+    # uv build --wheel --out-dir /llvmlitewheel --build-constraint build_constraints.txt
 
-    : ================== Installing Llvmlite ==================
-    git clone --recursive https://github.com/numba/llvmlite.git -b v${LLVMLITE_VERSION}
-    cd llvmlite
-    echo "setuptools<70.0.0" > build_constraints.txt
-    uv build --wheel --out-dir /llvmlitewheel --build-constraint build_constraints.txt
+    # : ================= Fix LLvmlite Wheel ====================
+    # cd /llvmlitewheel
 
-    : ================= Fix LLvmlite Wheel ====================
-    cd /llvmlitewheel
+    # auditwheel repair llvmlite*.whl
+    # mv wheelhouse/llvmlite*.whl ${WHEEL_DIR}
 
-    auditwheel repair llvmlite*.whl
-    mv wheelhouse/llvmlite*.whl ${WHEEL_DIR}
-
-    cd "$REPO_ROOT"
-    rm -rf $TEMP_BUILD_DIR
+    # cd "$REPO_ROOT"
+    # rm -rf $TEMP_BUILD_DIR
 }
 
 
 install_opencv() {
-    TEMP_BUILD_DIR=$(mktemp -d)
-    cd ${TEMP_BUILD_DIR}
-    export OPENCV_VERSION=92
+    export OPENCV_VERSION=${OPENCV_VERSION:-4.13.0.92}
+    echo "========== Installing OpenCV from DevPI =========="
+    try_install_from_devpi "opencv-python-headless==${OPENCV_VERSION}"
+    echo "OpenCV installed from DevPI"
+    # TEMP_BUILD_DIR=$(mktemp -d)
+    # cd ${TEMP_BUILD_DIR}
+    # export OPENCV_VERSION=92
 
-    export ENABLE_HEADLESS=1
-    git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
-    cd opencv-python && \
-    if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
-    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
-    uv build --wheel --out-dir ${WHEEL_DIR} && \
-    cd "$REPO_ROOT" && \
-    rm -rf $TEMP_BUILD_DIR
+    # export ENABLE_HEADLESS=1
+    # git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
+    # cd opencv-python && \
+    # if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
+    # sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
+    # uv build --wheel --out-dir ${WHEEL_DIR} && \
+    # cd "$REPO_ROOT" && \
+    # rm -rf $TEMP_BUILD_DIR
 
 }
 
@@ -315,58 +391,61 @@ rm -rf $TEMP_BUILD_DIR
 # NUMBA
 ########################################
 
-install_numba() {
+# install_numba() {
 
-TEMP_BUILD_DIR=$(mktemp -d)
-cd $TEMP_BUILD_DIR
+# # TEMP_BUILD_DIR=$(mktemp -d)
+# # cd $TEMP_BUILD_DIR
 
-#NUMBA_VERSION=$(grep -Eo '^numba.+;' $REPO_ROOT/requirements/cpu.txt | grep -Eo '[0-9.]+' | tail -1)
-NUMBA_VERSION=$(grep 'numba' "$REPO_ROOT/requirements/cpu.txt" | \
-    sed -E 's/.*numba *== *([0-9.]+).*/\1/' | \
-    tail -1)
-git clone --depth 1 https://github.com/numba/numba.git -b ${NUMBA_VERSION}
+# #NUMBA_VERSION=$(grep -Eo '^numba.+;' $REPO_ROOT/requirements/cpu.txt | grep -Eo '[0-9.]+' | tail -1)
+# NUMBA_VERSION=$(grep 'numba' "$REPO_ROOT/requirements/cpu.txt" | \
+#     sed -E 's/.*numba *== *([0-9.]+).*/\1/' | \
+#     tail -1)
+# # git clone --depth 1 https://github.com/numba/numba.git -b ${NUMBA_VERSION}
 
-cd numba
+# # cd numba
 
-sed -i '/#include "internal\/pycore_atomic.h"/i\#include "dynamic_annotations.h"' numba/_dispatcher.cpp || true
+# # sed -i '/#include "internal\/pycore_atomic.h"/i\#include "dynamic_annotations.h"' numba/_dispatcher.cpp || true
 
-uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+# # uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
 
-cd "$REPO_ROOT"
-rm -rf $TEMP_BUILD_DIR
-}
+# # cd "$REPO_ROOT"
+# # rm -rf $TEMP_BUILD_DIR
+# uv pip install numba==0.65.0
+# }
 
 install_xgrammar() {
-    cd ${REPO_ROOT}
+    curl -L -o ${WHEEL_DIR}/xgrammar-0.2.0-2-cp312-cp312-linux_ppc64le.whl   https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.5-EA1/cpu-ubi9-test/xgrammar-0.2.0-2-cp312-cp312-linux_ppc64le.whl
+    # uv pip install "https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.5-EA2/cpu-ubi9-test/xgrammar-0.2.0-2-cp312-cp312-linux_ppc64le.whl"
+    # cd ${REPO_ROOT}
 
-    echo "========== Installing xgrammar =========="
-    export XGRAMMAR_VERSION="0.1.32"
-    echo "xgrammar version: ${XGRAMMAR_VERSION}"
+    # echo "========== Installing xgrammar =========="
+    # export XGRAMMAR_VERSION="0.1.32"
+    # echo "xgrammar version: ${XGRAMMAR_VERSION}"
 
-    TEMP_BUILD_DIR=$(mktemp -d)
-    cd ${TEMP_BUILD_DIR}
+    # TEMP_BUILD_DIR=$(mktemp -d)
+    # cd ${TEMP_BUILD_DIR}
 
-    export CFLAGS="-fno-lto -mcpu=power9"
-    export CXXFLAGS="-fno-lto -mcpu=power9"
-    export LDFLAGS="-fno-lto"
-    export CMAKE_ARGS="-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF"
+    # export CFLAGS="-fno-lto -mcpu=power9"
+    # export CXXFLAGS="-fno-lto -mcpu=power9"
+    # export LDFLAGS="-fno-lto"
+    # export CMAKE_ARGS="-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF"
 
-    echo "========== Cloning xgrammar =========="
-    git clone --recursive https://github.com/mlc-ai/xgrammar -b v${XGRAMMAR_VERSION}
+    # echo "========== Cloning xgrammar =========="
+    # git clone --recursive https://github.com/mlc-ai/xgrammar -b v${XGRAMMAR_VERSION}
 
-    cd xgrammar
+    # cd xgrammar
 
-    cp cmake/config.cmake .
+    # cp cmake/config.cmake .
 
-    echo "========== Building wheel =========="
-    uv build --wheel --out-dir ${WHEEL_DIR}
+    # echo "========== Building wheel =========="
+    # uv build --wheel --out-dir ${WHEEL_DIR}
 
-    echo "========== Installing wheel =========="
-    uv pip install ${WHEEL_DIR}/xgrammar*.whl
+    # echo "========== Installing wheel =========="
+    # uv pip install ${WHEEL_DIR}/xgrammar*.whl
 
-    echo "========== Cleanup =========="
-    cd ${REPO_ROOT}
-    rm -rf ${TEMP_BUILD_DIR}
+    # echo "========== Cleanup =========="
+    # cd ${REPO_ROOT}
+    # rm -rf ${TEMP_BUILD_DIR}
 
 }
 
@@ -377,14 +456,14 @@ install_xgrammar() {
 install_opencv
 install_torch_family
 install_llvmlite
-install_pyarrow
-install_numba
+# install_pyarrow
+# install_numba
 install_xgrammar
 
 ########################################
 # install built wheels
 ########################################
-uv pip install maturin setuptools-rust scikit-build-core pybind11 nanobind \
+uv pip install setuptools_scm maturin setuptools-rust ninja scikit-build-core pybind11 nanobind \
     --no-build-isolation
 
 uv pip install ${WHEEL_DIR}/*.whl \
@@ -414,4 +493,4 @@ export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' 
 
 uv pip install -r requirements/common.txt \
                -r requirements/cpu.txt \
-               -r requirements/build.txt --extra-index-url "$IBM_DEVPI_URL" --index-strategy unsafe-best-match
+               -r requirements/build/cpu.txt --extra-index-url "$IBM_DEVPI_URL" --index-strategy unsafe-best-match
