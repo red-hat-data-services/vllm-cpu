@@ -259,4 +259,4 @@ uv pip install ${WHEEL_DIR}/*.whl
 
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
 uv pip install "jinja2==3.1.6" "markupsafe>=2.0"
-uv pip install -r requirements/cpu.txt -r requirements/cpu-build.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
+uv pip install -r requirements/cpu.txt -r requirements/build/cpu.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
