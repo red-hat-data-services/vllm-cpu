@@ -219,7 +219,7 @@ python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
 # outlines-core
 # -------------------------
 cd ${CURDIR}
-export OUTLINES_CORE_VERSION=0.2.11
+export OUTLINES_CORE_VERSION=0.2.14
 git clone https://github.com/dottxt-ai/outlines-core.git
 cd outlines-core
 git checkout tags/${OUTLINES_CORE_VERSION}
