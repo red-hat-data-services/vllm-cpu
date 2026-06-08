@@ -259,11 +259,14 @@ greenlet==3.2.3
     # via sqlalchemy
 grpcio==1.78.0
     # via
+    #   -c requirements/common.txt
     #   -r requirements/test/cuda.in
     #   grpcio-reflection
     #   ray
 grpcio-reflection==1.78.0
-    # via -r requirements/test/cuda.in
+    # via
+    #   -c requirements/common.txt
+    #   -r requirements/test/cuda.in
 h11==0.14.0
     # via
     #   httpcore
