@@ -1,190 +1,72 @@
-# Base UBI image
 ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
+FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG}
 
-###############################################################
-#                       BUILDER  STAGE                        #
-###############################################################
-
-FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builder-base
-
-ARG VLLM_VERSION="0.19.1"
 ARG PYTHON_VERSION=3.12
-ARG VLLM_TARGET_DEVICE=cpu
+ARG VLLM_VERSION=0.21.0
 
-USER root
-WORKDIR /root
-ENV HOME=/root
-
-ENV WHEEL_DIR=/wheelsdir
 ENV VIRTUAL_ENV=/opt/vllm
-ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
-ENV CARGO_HOME=/root/.cargo
-ENV RUSTUP_HOME=/root/.rustup
-ENV PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH
-ENV PCP_DIR=/opt/rh/gcc-toolset-14/root
-ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
+ENV PATH=${VIRTUAL_ENV}/bin:$PATH
 
-RUN --mount=type=cache,target=/var/cache/dnf \
-    microdnf install -y \
-    python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
-    && python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}
-
-# Important: Copy only bare minimum required for the script to run
-COPY requirements/ requirements/
-COPY pyproject.toml ./
-
-# The script is expected to install whatever python dependencies are missing
-# as well as whatever system libraries need to be installed from source
-COPY  build_vllm_*.sh ./
-
-# this script would build & install all necessary packages from source
-# in the current vurtual environment
-RUN --mount=type=cache,target=/root/.cache/uv \
-    sh ./build_vllm_$(uname -m).sh
-
-# copy vllm source code to build cache
-COPY . .
-
-# Build and install vllm (run this on both s390x as well as ppc64le)
-# build & install vLLM so that all transitive dependencies are build/downloaded into the uv cache
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install 'setuptools==77.0.3' && \
-    if [ "$(uname -m)" = "ppc64le" ]; then source /opt/rh/gcc-toolset-14/enable; fi && \
-    SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \
-      --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
-    uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" --refresh
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ "$(uname -m)" = "ppc64le" ]; then source /opt/rh/gcc-toolset-14/enable; fi && \
-    export IBM_DEVPI_URL="https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/" && \
-    uv cache prune && \
-    uv pip install $WHEEL_DIR/*.whl --extra-index-url $IBM_DEVPI_URL --index-strategy unsafe-best-match --verbose --force-reinstall --refresh
-
-###############################################################
-#                   FINAL VLLM IMAGE STAGE                    #
-###############################################################
-
-FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS vllm-openai
-
-LABEL name="rhoai/odh-vllm-cpu-rhel9" \
-    com.redhat.component="odh-vllm-cpu-rhel9" \
-    io.k8s.display-name="odh-vllm-cpu-rhel9" \
-    io.k8s.description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-    description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-    summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-    com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"
-
-ARG PYTHON_VERSION=3.12
 ENV VLLM_NO_USAGE_STATS=1
+ENV VLLM_USE_V1=1
+ENV VLLM_WORKER_MULTIPROC_METHOD=fork
+ENV VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+ENV HF_HUB_OFFLINE=0
+ENV OUTLINES_CACHE_DIR=/tmp/outlines
+ENV VLLM_TARGET_DEVICE=cpu
+ENV TORCHINDUCTOR_CPP_COMPILER=g++
 
-# Set Environment Variables for venv & openblas
-ENV VIRTUAL_ENV=/opt/vllm
-ENV PCP_DIR=/opt/rh/gcc-toolset-14/root
-ENV PATH=${VIRTUAL_ENV}/bin:${PCP_DIR}/usr/bin:/usr/local/bin:$PATH
-ENV PKG_CONFIG_PATH=${PCP_DIR}/usr/lib64/pkgconfig:/usr/local/lib/pkgconfig/
-ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
-ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
-ENV UV_LINK_MODE=copy
-ARG VLLM_VERSION="0.19.1"
-ENV UV_EXTRA_INDEX_URL=https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/
-ENV UV_INDEX_STRATEGY=unsafe-best-match
+# -----------------------------
+# System dependencies
+# -----------------------------
+RUN  microdnf install -y \
+      python${PYTHON_VERSION} \
+      python${PYTHON_VERSION}-pip \
+      python${PYTHON_VERSION}-devel \
+      util-linux \
+      tar findutils \
+      numactl flexiblas-openblas-openmp\
+      openblas openblas-devel \
+      libsndfile \
+      gcc \
+      gcc-c++ \
+      make \
+      libtiff libjpeg-turbo openjpeg2 \
+      libpng zlib \
+      libwebp \
+      freetype harfbuzz fribidi \
+      lcms2 \
+      libicu \
+      openssl \
+      && microdnf clean all
 
-RUN if [ "$(uname -m)" = "s390x" ]; then \
-    microdnf install --nodocs -y \
-    gcc gcc-gfortran g++ make patch zlib-devel \
-    libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
-    openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
-    clang llvm-devel llvm clang-devel git perl-core \
-    python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
-    && microdnf update -y && microdnf clean all; \
-    fi
 
-RUN if [ "$(uname -m)" = "s390x" ]; then \
-    python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
-    python -m pip install -U pip uv --no-cache; \
-    fi
-###################################
-# P system packages install block #
-###################################
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,from=builder-base,source=/root/numactl/,target=/numactl/ \
-    --mount=type=cache,from=builder-base,source=/root/lapack/,target=/lapack/ \
-    --mount=type=cache,from=builder-base,source=/root/OpenBLAS,target=/openblas/ \
-    --mount=type=cache,from=builder-base,source=/usr/local/,target=/tmp/usr-local/ \
-    bash -c '\
-    if [[ $(uname -m) == "s390x" ]]; then \
-    make -C /numactl install; \
-    # Copy source-built LLVM from builder stage
-    cp -r /tmp/usr-local/bin/* /usr/local/bin/ 2>/dev/null || true; \
-    cp -r /tmp/usr-local/lib/* /usr/local/lib/ 2>/dev/null || true; \
-    cp -r /tmp/usr-local/include/* /usr/local/include/ 2>/dev/null || true; \
-    fi; \
-    if [[ $(uname -m) == "ppc64le" ]]; then \
-    # system dependencies needed at runtime for ppc64le; \
-    rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
-    microdnf install --nodocs -y \
-    libomp tar findutils openssl libicu \
-    pkgconfig gcc-toolset-14 libsndfile \
-    libtiff libjpeg openjpeg2 libimagequant zlib gperftools-libs \
-    freetype lcms2 libwebp tcl tk utf8proc \
-    harfbuzz fribidi libxcb \
-    python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
-    && microdnf update -y && microdnf clean all; \
-    python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
-    python -m pip install -U pip uv==0.4.30 --no-cache; \
-    make -C /numactl install; \
-    PREFIX=/usr/local make -C /openblas install; \
-    uv pip install --no-cache cmake; \
-    cmake --install /lapack/build; \
-    uv pip uninstall cmake; \
-    fi'
+# -----------------------------
+# VLLM
+# -----------------------------
+RUN pip3.12 install \
+      opencv-python-headless==4.13.0.92 \
+      --extra-index-url https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/
 
-# The `lscpu` command was added as a requirement in part of https://github.com/vllm-project/vllm/pull/21032, so installing it.
-RUN microdnf install --nodocs -y util-linux && \
-    microdnf clean all
+RUN pip3.12 install \
+      "vllm==${VLLM_VERSION}" \
+      --extra-index-url https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5-EA2/cpu-ubi9-test/simple/
 
-# consume previously built wheels
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,from=builder-base,source=/wheelsdir/,target=/wheelsdir/,ro \
-    export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':') && \
-    # --offline will ensure wheels are picked from uv cache and nothing is pulled from pypi/built from source
-    # vllm wheel should be present in /wheelsdir/ ( at least for ppc64le - and transitive dependencies in uv cache )
-    uv pip install 'setuptools==77.0.3' && \
-    HOME=/root uv pip install /wheelsdir/*.whl --offline
 
-ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
+ENV VLLM_CPU_MEMORY_UTILIZATION=0.65
+ENV KMP_AFFINITY=granularity=fine,compact,1,0
 
-WORKDIR /home/vllm
+# tcmalloc preload
+#ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
-# setup non-root user for OpenShift
-RUN umask 002 && \
-    useradd --uid 2000 --gid 0 vllm && \
+# -----------------------------
+# User setup
+# -----------------------------
+RUN useradd --uid 2000 --gid 0 vllm && \
     mkdir -p /home/vllm && \
     chmod g+rwx /home/vllm
 
-ENV HF_HUB_OFFLINE=0 \
-    HOME=/home/vllm \
-    # Allow requested max length to exceed what is extracted from the
-    # config.json
-    # see: https://github.com/vllm-project/vllm/pull/7080
-    VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 \
-    VLLM_USAGE_SOURCE=production-docker-image \
-    VLLM_WORKER_MULTIPROC_METHOD=fork \
-    VLLM_NO_USAGE_STATS=1 \
-    OUTLINES_CACHE_DIR=/tmp/outlines \
-    VLLM_USE_V1=1
-
-COPY LICENSE /licenses/vllm.md
-COPY examples/*.jinja /app/data/template/
-
+WORKDIR /home/vllm
 USER 2000
 
-ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
-
-LABEL name="rhoai/odh-vllm-cpu-rhel9" \
-    com.redhat.component="odh-vllm-cpu-rhel9" \
-    io.k8s.display-name="odh-vllm-cpu-rhel9" \
-    io.k8s.description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-    description="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-    summary="CPU-only build of vLLM, optimized for running inference without requiring GPU hardware." \
-    com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"
+ENTRYPOINT ["python3.12", "-m", "vllm.entrypoints.openai.api_server"]
