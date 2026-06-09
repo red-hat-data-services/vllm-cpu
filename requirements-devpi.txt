@@ -1,0 +1,4 @@
+--index-url https://wheels-staging.developerfirst.ibm.com/ppc64le/linux/+simple/
+
+opencv-python-headless==4.13.0.92+ppc64le1 \
+    --hash=sha256:9d1ba8e928c0782b868e7570716b63950c9ade16fbe12088ceb9c24d9e1c5540

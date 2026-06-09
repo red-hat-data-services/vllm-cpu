@@ -45,7 +45,7 @@ RUN  microdnf install -y \
 # -----------------------------
 RUN python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}
 
-RUN pip install --upgrade pip uv
+RUN pip install uv
 
 # -----------------------------
 # VLLM
