@@ -57,7 +57,7 @@ ENV VLLM_CPU_MEMORY_UTILIZATION=0.65
 ENV KMP_AFFINITY=granularity=fine,compact,1,0
 
 # tcmalloc preload
-ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
+#ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
 # -----------------------------
 # User setup
@@ -69,4 +69,4 @@ RUN useradd --uid 2000 --gid 0 vllm && \
 WORKDIR /home/vllm
 USER 2000
 
-ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
+ENTRYPOINT ["python3.12", "-m", "vllm.entrypoints.openai.api_server"]
