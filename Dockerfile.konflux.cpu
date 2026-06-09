@@ -19,8 +19,7 @@ ENV TORCHINDUCTOR_CPP_COMPILER=g++
 # -----------------------------
 # System dependencies
 # -----------------------------
-RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
-    microdnf install -y \
+RUN  microdnf install -y \
       python${PYTHON_VERSION} \
       python${PYTHON_VERSION}-pip \
       python${PYTHON_VERSION}-devel \
