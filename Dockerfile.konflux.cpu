@@ -25,15 +25,12 @@ RUN  microdnf install -y \
       python${PYTHON_VERSION}-devel \
       util-linux \
       tar findutils \
-      numactl numactl-devel \
+      numactl flexiblas-openblas-openmp\
       openblas openblas-devel \
-      openmpi openmpi-devel \
-      zeromq zeromq-devel \
       libsndfile \
       gcc \
       gcc-c++ \
       make \
-      gperftools-libs \
       libtiff libjpeg-turbo openjpeg2 \
       libpng zlib \
       libwebp \
