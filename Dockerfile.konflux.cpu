@@ -40,21 +40,15 @@ RUN  microdnf install -y \
       openssl \
       && microdnf clean all
 
-# -----------------------------
-# Virtual environment
-# -----------------------------
-RUN python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}
-
-RUN pip install uv
 
 # -----------------------------
 # VLLM
 # -----------------------------
-RUN uv pip install \
+RUN pip3.12 install \
       opencv-python-headless==4.13.0.92 \
       --extra-index-url https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/
 
-RUN uv pip install \
+RUN pip3.12 install \
       "vllm==${VLLM_VERSION}" \
       --extra-index-url https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5-EA2/cpu-ubi9-test/simple/
 

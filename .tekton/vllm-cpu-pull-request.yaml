@@ -41,7 +41,6 @@ spec:
           "type": "pip",
           "path": ".",
           "requirements_files": [
-            "requirements.txt",
             "requirements-devpi.txt",
             "requirements-rh.txt"
           ],
