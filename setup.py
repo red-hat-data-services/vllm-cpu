@@ -1104,6 +1104,11 @@ setup(
         ],  # Required for audio processing
         "video": [],  # Kept for backwards compatibility
         "flashinfer": [],  # Kept for backwards compatibility
+
+        # Workaround to https://issues.redhat.com/browse/AIPCC-8724
+        # required for ray Compiled Graph/pipeline parallelism
+        "cgraph-cuda12": ["cupy-cuda12x"],
+        "cgraph-cuda13": ["cupy-cuda13x"],
         # Optional deps for Helion kernel development
         # NOTE: When updating helion version, also update CI files:
         #   - .buildkite/test_areas/kernels.yaml
