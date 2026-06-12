@@ -86,7 +86,7 @@ make install
 export C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 
 # Download torch and setuptools (with correct version constraints for vllm)
-pip download torch==2.10.0+cpu \
+pip download torch==2.11.0+cpu \
   --index-url https://download.pytorch.org/whl/cpu \
   --extra-index-url https://pypi.org/simple \
   -d ${WHEEL_DIR}
@@ -99,10 +99,10 @@ pip download "setuptools==77.0.3" \
 # -------------------------
 # TorchVision
 # -------------------------
-export TORCH_VISION_VERSION=v0.20.1
+export TORCH_VISION_VERSION=v0.26.0
 cd ${CURDIR}
 uv pip install cmake ninja wheel "setuptools>=77.0.3,<81.0.0"
-uv pip install torch==2.10.0+cpu --index-url https://download.pytorch.org/whl/cpu
+uv pip install torch==2.11.0+cpu --index-url https://download.pytorch.org/whl/cpu
 git clone https://github.com/pytorch/vision.git
 cd vision
 git checkout $TORCH_VISION_VERSION
@@ -219,7 +219,7 @@ python setup.py bdist_wheel --dist-dir "${WHEEL_DIR}"
 # outlines-core
 # -------------------------
 cd ${CURDIR}
-export OUTLINES_CORE_VERSION=0.2.11
+export OUTLINES_CORE_VERSION=0.2.14
 git clone https://github.com/dottxt-ai/outlines-core.git
 cd outlines-core
 git checkout tags/${OUTLINES_CORE_VERSION}
@@ -259,4 +259,4 @@ uv pip install ${WHEEL_DIR}/*.whl
 
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
 uv pip install "jinja2==3.1.6" "markupsafe>=2.0"
-uv pip install -r requirements/cpu.txt -r requirements/cpu-build.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
+uv pip install -r requirements/cpu.txt -r requirements/build/cpu.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
