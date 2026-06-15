@@ -680,12 +680,6 @@ class MistralToolParser(ToolParser):
                         ).model_dump(exclude_none=True),
                     )
                 ]
-                # Track streamed arguments for serving_chat.py's
-                # autocomplete logic
-                if delta_arguments and self.current_tool_id < len(
-                    self.streamed_args_for_tool
-                ):
-                    self.streamed_args_for_tool[self.current_tool_id] += delta_arguments
                 self.current_tool_name = None
             if next_function_text:
                 ret += self._generate_delta_tool_call(next_function_text)
@@ -863,12 +857,6 @@ class MistralToolParser(ToolParser):
                     # It's the first chunk of arg. let's lstrip it
                     current_tool_call.function.arguments = (
                         current_tool_call.function.arguments.lstrip()
-                    )
-                # Track streamed arguments for serving_chat.py's
-                # autocomplete logic
-                if self.current_tool_id < len(self.streamed_args_for_tool):
-                    self.streamed_args_for_tool[self.current_tool_id] += (
-                        delta_to_be_parsed
                     )
 
         if current_tool_call_modified:
