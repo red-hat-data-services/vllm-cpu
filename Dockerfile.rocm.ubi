@@ -66,8 +66,8 @@ WORKDIR /workspace
 ENV VIRTUAL_ENV=/opt/vllm
 ENV PATH=$VIRTUAL_ENV/bin:$PATH
 
-# Required for triton
-RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs gcc rsync && \
+# Required for triton (gcc, rsync) and audio multimodal support (libsndfile)
+RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs gcc rsync libsndfile && \
     microdnf clean all
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -77,10 +77,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ENV HF_HUB_OFFLINE=1 \
     VLLM_USAGE_STATS_SERVER=https://console.redhat.com/api/rhaiis-stats \
     VLLM_USAGE_SOURCE=quay-docker-image \
+    VLLM_WORKER_MULTIPROC_METHOD=spawn \
     # Silences the HF Tokenizers warning
     TOKENIZERS_PARALLELISM=false  \
     RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
-    VLLM_USE_TRITON_FLASH_ATTN=0 \
     VLLM_ROCM_USE_AITER=0 \
     HIP_FORCE_DEV_KERNARG=1 \
     OUTLINES_CACHE_DIR=/tmp/outlines \
