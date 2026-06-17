@@ -7,7 +7,7 @@ ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builder-base
 
-ARG VLLM_VERSION="0.19.1"
+ARG VLLM_VERSION="0.21.0"
 ARG PYTHON_VERSION=3.12
 ARG VLLM_TARGET_DEVICE=cpu
 
@@ -57,7 +57,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ "$(uname -m)" = "ppc64le" ]; then source /opt/rh/gcc-toolset-14/enable; fi && \
     export IBM_DEVPI_URL="https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/" && \
-    uv cache prune && \
     uv pip install $WHEEL_DIR/*.whl --extra-index-url $IBM_DEVPI_URL --index-strategy unsafe-best-match --verbose --force-reinstall --refresh
 
 ###############################################################
@@ -85,7 +84,7 @@ ENV PKG_CONFIG_PATH=${PCP_DIR}/usr/lib64/pkgconfig:/usr/local/lib/pkgconfig/
 ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
 ENV UV_LINK_MODE=copy
-ARG VLLM_VERSION="0.19.1"
+ARG VLLM_VERSION="0.21.0"
 ENV UV_EXTRA_INDEX_URL=https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/
 ENV UV_INDEX_STRATEGY=unsafe-best-match
 
@@ -107,9 +106,6 @@ RUN if [ "$(uname -m)" = "s390x" ]; then \
 # P system packages install block #
 ###################################
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,from=builder-base,source=/root/numactl/,target=/numactl/ \
-    --mount=type=cache,from=builder-base,source=/root/lapack/,target=/lapack/ \
-    --mount=type=cache,from=builder-base,source=/root/OpenBLAS,target=/openblas/ \
     --mount=type=cache,from=builder-base,source=/usr/local/,target=/tmp/usr-local/ \
     bash -c '\
     if [[ $(uname -m) == "s390x" ]]; then \
@@ -127,21 +123,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     pkgconfig gcc-toolset-14 libsndfile \
     libtiff libjpeg openjpeg2 libimagequant zlib gperftools-libs \
     freetype lcms2 libwebp tcl tk utf8proc \
-    harfbuzz fribidi libxcb \
+    harfbuzz fribidi libxcb numactl numactl-devel openmpi openmpi-devel zeromq-devel openblas openblas-devel \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
     && microdnf update -y && microdnf clean all; \
     python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
-    python -m pip install -U pip uv==0.4.30 --no-cache; \
-    make -C /numactl install; \
-    PREFIX=/usr/local make -C /openblas install; \
-    uv pip install --no-cache cmake; \
-    cmake --install /lapack/build; \
-    uv pip uninstall cmake; \
+    python -m pip install -U pip uv --no-cache; \
+    cp -a /tmp/usr-local/lib64/* /usr/local/lib64/; \
+    ldconfig; \
     fi'
 
 # The `lscpu` command was added as a requirement in part of https://github.com/vllm-project/vllm/pull/21032, so installing it.
 RUN microdnf install --nodocs -y util-linux && \
     microdnf clean all
+
 
 # consume previously built wheels
 RUN --mount=type=cache,target=/root/.cache/uv \
