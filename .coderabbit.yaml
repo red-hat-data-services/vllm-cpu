@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "en-US"
+inheritance: true
+
+reviews:
+  auto_review:
+    base_branches:
+    - "main"
+    - "rhai/.*"
+    - "rhaiis/.*"
+
+  path_instructions:
+  - path: "**/*.py"
+    instructions: |
+      - This is a midstream fork of vLLM for Red Hat AI Inference Server (RHAIIS)
+      - Project targets Python 3.12 (requires-python = '==3.12.*')
+      - Focus on security, correctness, and coding style adherence in new code
+      - Code should follow Python best practices, type annotations use modern syntax (list[str] not List[str])
+      - Check AGENTS file for project-specific conventions
+  - path: "csrc/**"
+    instructions: |
+      - C++/CUDA kernel code for vLLM model execution
+      - Focus on memory safety, kernel correctness, and performance
+      - Check for proper CUDA error handling and memory management
+  - path: "Dockerfile*"
+    instructions: |
+      - These are UBI-based container images for RHAIIS hardware variants (CUDA, ROCm, CPU, TPU, HPU)
+      - Focus on security (no secrets, minimal layers), proper multi-stage builds, and UBI compliance
+      - Ensure consistency across variant Dockerfiles where applicable
+  - path: "requirements/**"
+    instructions: |
+      - Dependency specifications for different hardware variants
+      - Check for version pinning consistency and security of dependencies
+
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  changed_files_summary: false
+  suggested_labels: false
+  suggested_reviewers: false
+  related_issues: false
+  related_prs: false
+  poem: false
+
+  tools:
+    languagetool:
+      enabled: true
+    shellcheck:
+      enabled: true
+    ruff:
+      enabled: true
+    pylint:
+      enabled: true
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    markdownlint:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  web_search:
+    enabled: true
+  pull_requests:
+    scope: auto
