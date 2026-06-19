@@ -197,3 +197,5 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:/usr/
 uv pip install -r requirements/common.txt \
                -r requirements/cpu.txt \
                -r requirements/build/cpu.txt --extra-index-url "$IBM_DEVPI_URL" --index-strategy unsafe-best-match
+
+uv pip install "fastapi[standard]>=0.115.0,<0.137"
