@@ -188,7 +188,7 @@ uv pip install ${WHEEL_DIR}/*.whl \
 ########################################
 
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
-
+sed -i '/fastapi\[standard\]/ s/>= 0\.120\.1/>= 0.120.1, < 0.137/' requirements/common.txt
 # revert back for numba/llvmlite compatibility
 uv pip install "setuptools<70" --no-build-isolation
 
@@ -197,5 +197,3 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:/usr/
 uv pip install -r requirements/common.txt \
                -r requirements/cpu.txt \
                -r requirements/build/cpu.txt --extra-index-url "$IBM_DEVPI_URL" --index-strategy unsafe-best-match
-
-uv pip install "fastapi[standard]>=0.115.0,<0.137"
