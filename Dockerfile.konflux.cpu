@@ -54,11 +54,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
     uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" --refresh
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ "$(uname -m)" = "ppc64le" ]; then source /opt/rh/gcc-toolset-14/enable; fi && \
-    export IBM_DEVPI_URL="https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/" && \
-    uv pip install $WHEEL_DIR/*.whl --extra-index-url $IBM_DEVPI_URL --index-strategy unsafe-best-match --verbose --force-reinstall --refresh
-
 ###############################################################
 #                   FINAL VLLM IMAGE STAGE                    #
 ###############################################################
@@ -136,15 +131,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN microdnf install --nodocs -y util-linux && \
     microdnf clean all
 
-
-# consume previously built wheels
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,from=builder-base,source=/wheelsdir/,target=/wheelsdir/,ro \
-    export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':') && \
-    # --offline will ensure wheels are picked from uv cache and nothing is pulled from pypi/built from source
-    # vllm wheel should be present in /wheelsdir/ ( at least for ppc64le - and transitive dependencies in uv cache )
-    uv pip install 'setuptools==77.0.3' && \
-    HOME=/root uv pip install /wheelsdir/*.whl --offline
+# Use builder venv in final stage instead of wheel reinstallation
+COPY --from=builder-base /opt/vllm /opt/vllm
 
 ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
