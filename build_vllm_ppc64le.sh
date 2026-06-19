@@ -13,7 +13,7 @@ cd "$REPO_ROOT"
 ########################################
 
 IBM_DEVPI_URL=${IBM_DEVPI_URL:-"https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/"}
-RHOAI_INDEX_URL=${RHOAI_INDEX_URL:-"https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5-EA2/cpu-ubi9-test/simple/"}
+RHOAI_INDEX_URL=${RHOAI_INDEX_URL:-"https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5-EA2/cpu-ubi9/simple/"}
 
 ########################################
 # wheel dir
@@ -188,7 +188,7 @@ uv pip install ${WHEEL_DIR}/*.whl \
 ########################################
 
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
-
+sed -i '/fastapi\[standard\]/ s/>= 0\.120\.1/>= 0.120.1, < 0.137/' requirements/common.txt
 # revert back for numba/llvmlite compatibility
 uv pip install "setuptools<70" --no-build-isolation
 
