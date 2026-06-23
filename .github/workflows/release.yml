@@ -24,22 +24,17 @@ jobs:
   trigger-release:
     runs-on: ubuntu-latest
     steps:
-    - name: Resolve tag and SHA
+    - name: Resolve tag
       id: resolve
       run: |
         if [[ "${{ github.event_name }}" == "push" ]]; then
           TAG="${{ github.ref_name }}"
-          SHA="${{ github.sha }}"
-          echo "Triggered by push — tag: $TAG, sha: $SHA"
+          echo "Triggered by push — tag: $TAG"
         else
           TAG="${{ inputs.tag }}"
-          SHA=$(gh api "repos/${{ github.repository }}/commits/refs/tags/$TAG" --jq '.sha')
-          echo "Triggered by workflow_dispatch — resolved tag '$TAG' -> $SHA"
+          echo "Triggered by workflow_dispatch — tag: $TAG"
         fi
         echo "tag=$TAG" >> $GITHUB_OUTPUT
-        echo "sha=$SHA" >> $GITHUB_OUTPUT
-      env:
-        GH_TOKEN: ${{ github.token }}
 
     - name: Trigger nm-cicd release workflow
       id: trigger
@@ -56,7 +51,6 @@ jobs:
         echo "  nm-cicd ref: $CICD_REF"
         echo "  repo:        ${{ github.repository }}"
         echo "  tag:         ${{ steps.resolve.outputs.tag }}"
-        echo "  sha:         ${{ steps.resolve.outputs.sha }}"
         echo "  dry_run:     $DRY_RUN"
 
         RUN_URL=$(gh workflow run release.yml \
@@ -64,7 +58,6 @@ jobs:
           --ref "$CICD_REF" \
           -f repo=${{ github.repository }} \
           -f tag=${{ steps.resolve.outputs.tag }} \
-          -f sha=${{ steps.resolve.outputs.sha }} \
           -f dry_run="$DRY_RUN")
 
         RUN_ID=$(echo "$RUN_URL" | grep -oE '[0-9]+$')
@@ -83,9 +76,8 @@ jobs:
         | Run URL     | $RUN_URL                              |
         | nm-cicd ref | \`$CICD_REF\`                         |
         | repo        | \`${{ github.repository }}\`          |
-        | tag         | \`${{ steps.resolve.outputs.tag }}\`  |
-        | sha         | \`${{ steps.resolve.outputs.sha }}\`  |
-        | dry_run     | \`$DRY_RUN\`                          |
+        | tag         | \`${{ steps.resolve.outputs.tag }}\` |
+        | dry_run     | \`$DRY_RUN\`                         |
         EOF
       env:
         GH_TOKEN: ${{ secrets.CICD_GITHUB_PAT }}
