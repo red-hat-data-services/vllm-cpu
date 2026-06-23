@@ -15,6 +15,10 @@ on:
         description: "Branch or ref of nm-cicd to use (e.g. main)"
         type: string
         default: "main"
+      dry_run:
+        description: "Pass dry_run=true to nm-cicd release workflow (prints what would be triggered without building)"
+        type: boolean
+        default: true
 
 jobs:
   trigger-release:
@@ -40,8 +44,10 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
             CICD_REF="main"
+            DRY_RUN="false"
           else
             CICD_REF="${{ inputs.cicd_ref }}"
+            DRY_RUN="${{ inputs.dry_run }}"
           fi
 
           RUN_URL=$(gh workflow run release.yml \
@@ -49,7 +55,8 @@ jobs:
             --ref "$CICD_REF" \
             -f repo=${{ github.repository }} \
             -f tag=${{ steps.resolve.outputs.tag }} \
-            -f sha=${{ steps.resolve.outputs.sha }})
+            -f sha=${{ steps.resolve.outputs.sha }} \
+            -f dry_run="$DRY_RUN")
 
           RUN_ID=$(echo "$RUN_URL" | grep -oE '[0-9]+$')
 
@@ -66,6 +73,7 @@ jobs:
           | repo        | \`${{ github.repository }}\`          |
           | tag         | \`${{ steps.resolve.outputs.tag }}\`  |
           | sha         | \`${{ steps.resolve.outputs.sha }}\`  |
+          | dry_run     | \`$DRY_RUN\`                          |
           EOF
         env:
           GH_TOKEN: ${{ secrets.CICD_GITHUB_PAT }}
