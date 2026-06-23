@@ -8,9 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v0.9.0)"
+        description: "Tag to release (e.g. v0.23.0+rhaiv.0)"
         type: string
         required: true
+      cicd_ref:
+        description: "Branch or ref of nm-cicd to use (e.g. main)"
+        type: string
+        default: "main"
 
 jobs:
   trigger-release:
@@ -32,12 +36,65 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Trigger nm-cicd release workflow
+        id: trigger
         run: |
-          gh workflow run release.yml \
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            CICD_REF="main"
+          else
+            CICD_REF="${{ inputs.cicd_ref }}"
+          fi
+
+          RUN_URL=$(gh workflow run release.yml \
             --repo neuralmagic/nm-cicd \
-            --ref main \
+            --ref "$CICD_REF" \
             -f repo=${{ github.repository }} \
             -f tag=${{ steps.resolve.outputs.tag }} \
-            -f sha=${{ steps.resolve.outputs.sha }}
+            -f sha=${{ steps.resolve.outputs.sha }})
+
+          RUN_ID=$(echo "$RUN_URL" | grep -oE '[0-9]+$')
+
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "run_url=$RUN_URL" >> $GITHUB_OUTPUT
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### Triggered nm-cicd release workflow
+          | Parameter   | Value                                 |
+          | ----------- | --------------------------------------|
+          | Workflow    | \`neuralmagic/nm-cicd / release.yml\` |
+          | Run URL     | $RUN_URL                              |
+          | nm-cicd ref | \`$CICD_REF\`                         |
+          | repo        | \`${{ github.repository }}\`          |
+          | tag         | \`${{ steps.resolve.outputs.tag }}\`  |
+          | sha         | \`${{ steps.resolve.outputs.sha }}\`  |
+          EOF
+        env:
+          GH_TOKEN: ${{ secrets.CICD_GITHUB_PAT }}
+
+      - name: Wait for nm-cicd release workflow
+        run: |
+          RUN_ID="${{ steps.trigger.outputs.run_id }}"
+          gh run watch "$RUN_ID" --repo neuralmagic/nm-cicd --exit-status --interval 60
+
+          RESULT=$(gh run view "$RUN_ID" \
+            --repo neuralmagic/nm-cicd \
+            --json conclusion,url,jobs)
+
+          CONCLUSION=$(echo "$RESULT" | jq -r '.conclusion')
+          URL=$(echo "$RESULT" | jq -r '.url')
+          JOBS=$(echo "$RESULT" | jq -r '.jobs[] | "| \(.name) | `\(.conclusion)` |"')
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+
+          ### nm-cicd release workflow result
+          | Field      | Value           |
+          | ---------- | --------------- |
+          | Run URL    | $URL            |
+          | Conclusion | \`$CONCLUSION\` |
+
+          #### Jobs
+          | Job | Conclusion |
+          | --- | ---------- |
+          $JOBS
+          EOF
         env:
           GH_TOKEN: ${{ secrets.CICD_GITHUB_PAT }}
