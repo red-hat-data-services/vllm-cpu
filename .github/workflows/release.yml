@@ -31,7 +31,7 @@ jobs:
     - name: Resolve tag
       id: resolve
       run: |
-        TAG="${{ github.event_name }}" == "push" && {{ github.ref_name }} || {{ inputs.tag }}
+        TAG="${{ github.event_name == 'push' && github.ref_name || inputs.tag }}"
         echo "Triggered tag: $TAG"
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
