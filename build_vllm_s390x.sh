@@ -15,11 +15,20 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 
 # install development packages
 microdnf install -y \
-    which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
+    which procps findutils tar vim git \
+    gcc-toolset-14 gcc-toolset-14-binutils gcc-toolset-14-libatomic-devel \
+    make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool libzstd-devel cmake numpy libsndfile \
     clang clang-devel ninja-build perl-core llvm llvm-devel && \
     microdnf clean all
+
+source /opt/rh/gcc-toolset-14/enable
+export PATH=/opt/rh/gcc-toolset-14/root/usr/bin:$PATH
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64:${LD_LIBRARY_PATH}
+export LIBRARY_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64/pkgconfig:${PKG_CONFIG_PATH:-}
+
 
 pip install --no-cache -U pip setuptools wheel && \
 pip install --no-cache -U uv
