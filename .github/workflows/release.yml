@@ -5,11 +5,10 @@
 #   - cicd_ref=main
 #   - release=true
 #   - python=3.12
-#   - target_devices="cuda rocm tpu cpu neuron hpu",
-#   - image_label=ibm-wdc-k8s-h100-dind
+#   - target_devices="cuda, rocm, tpu, cpu, neuron, hpu"
 #   - model_validation_configs_ref=main
 #
-# Defaults: be sure to update both the `workflow_dispatch` and the `env` block (lines 57-65) defaults
+# Defaults: be sure to update both the `workflow_dispatch` and the `env` block
 
 name: release
 run-name: Release ${{ github.event_name == 'push' && github.ref_name || inputs.tag }} - ${{ github.actor }}
@@ -33,13 +32,9 @@ on:
         type: string
         default: "3.12"
       target_devices:
-        description: "Space-separated devices to build (default: all). Supported: cuda rocm tpu cpu neuron hpu"
+        description: "Comma-separated devices to build (default: all). Supported: cuda, rocm, tpu, cpu, neuron, hpu"
         type: string
-        default: "cuda rocm tpu cpu neuron hpu"
-      image_label:
-        description: "GHA runner label for image building"
-        type: string
-        default: "ibm-wdc-k8s-h100-dind"
+        default: "cuda, rocm, tpu, cpu, neuron, hpu"
       release:
         description: "Publish the built images"
         type: boolean
@@ -60,7 +55,6 @@ env:
   RELEASE:         ${{ github.event_name == 'push' && 'true'          || inputs.release }}
   PYTHON:          ${{ inputs.python                                  || '3.12' }}
   DEVICES:         ${{ inputs.target_devices                          || 'cuda rocm tpu cpu neuron hpu' }}
-  IMAGE_LABEL:     ${{ inputs.image_label                             || 'ibm-wdc-k8s-h100-dind' }}
   MODEL_VAL_REF:   ${{ inputs.model_validation_configs_ref            || 'main' }}
   TESTING_OPTIONS: ${{ inputs.testing_options_flags }}
 
@@ -89,7 +83,6 @@ jobs:
           -f release="$RELEASE" \
           -f python="$PYTHON" \
           -f target_devices="$DEVICES" \
-          -f image_label="$IMAGE_LABEL" \
           -f model_validation_configs_ref="$MODEL_VAL_REF" \
           -f testing_options_flags="$TESTING_OPTIONS")
 
@@ -109,7 +102,6 @@ jobs:
         | tag                          | \`$TAG\`                              |
         | python                       | \`$PYTHON\`                           |
         | target_devices               | \`$DEVICES\`                          |
-        | image_label                  | \`$IMAGE_LABEL\`                      |
         | model_validation_configs_ref | \`$MODEL_VAL_REF\`                    |
         | testing_options_flags        | \`$TESTING_OPTIONS\`                  |
         | release                      | \`$RELEASE\`                          |
