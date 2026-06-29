@@ -45,10 +45,11 @@ def get_act_fn(
         function_name = config.sbert_ce_default_activation_function
 
     if function_name is not None:
-        assert function_name.startswith("torch.nn.modules."), (
-            "Loading of activation functions is restricted to "
-            "torch.nn.modules for security reasons"
-        )
+        if not function_name.startswith("torch.nn.modules."):
+            raise ValueError(
+                "Loading of activation functions is restricted to "
+                "torch.nn.modules for security reasons"
+            )
         fn = resolve_obj_by_qualname(function_name)()
         return PoolerActivation.wraps(fn)
 
