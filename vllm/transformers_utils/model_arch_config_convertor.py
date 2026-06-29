@@ -554,6 +554,8 @@ MODEL_ARCH_CONFIG_CONVERTORS = {
     "gemma4": Gemma4ModelArchConfigConvertor,
     "gemma4_text": Gemma4ModelArchConfigConvertor,
     "gemma4_mtp": Gemma4MTPModelArchConfigConvertor,
+    "gemma4_unified": Gemma4ModelArchConfigConvertor,
+    "gemma4_unified_text": Gemma4ModelArchConfigConvertor,
     "RefinedWeb": FalconModelArchConfigConvertor,
     "RefinedWebModel": FalconModelArchConfigConvertor,
     "nemotron-nas": NemotronNasModelArchConfigConvertor,
