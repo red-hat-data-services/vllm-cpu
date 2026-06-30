@@ -64,7 +64,8 @@ def resolve_classifier_act_fn(
     if act_fn is None:
         return get_act_fn(model_config.hf_config, static_num_labels)
 
-    assert callable(act_fn)
+    if not callable(act_fn):
+        raise TypeError(f"Expected a callable activation function, got {type(act_fn)}")
     return act_fn
 
 
