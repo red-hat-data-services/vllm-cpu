@@ -77,6 +77,7 @@ from .utils import (
     init_vllm_registered_model,
     maybe_prefix,
 )
+from .transformers.utils import recursive_replace_linear
 
 logger = init_logger(__name__)
 
