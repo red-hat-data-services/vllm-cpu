@@ -22,8 +22,9 @@ fastsafetensors >= 0.3.2
 nvidia-cutlass-dsl[cu13]==4.5.2
 quack-kernels>=0.3.3
 
-# Tokenspeed_MLA for faster mla with spec decode
-tokenspeed-mla==0.1.2
+# NOTE(rhaiis-sync): tokenspeed-mla removed downstream — it breaks AIPCC wheel
+# pipelines and is not a hard dependency (see origin/main history / "remove
+# tokenspeed-mla as it breaks aipcc pipelines").
 
 # Humming kernels for quantization gemm
 humming-kernels[cu13]==0.1.6
