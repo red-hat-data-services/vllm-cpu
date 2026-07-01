@@ -44,7 +44,7 @@ class MistralCommonFeatureExtractor:
             if not self.audio_encoder.audio_config.is_streaming:
                 audio = self.audio_encoder.pad(audio, self.sampling_rate)
 
-            audios_processed.append(torch.tensor(audio))
+            audios_processed.append(torch.from_numpy(audio))
 
         return BatchFeature(
             {"audio_arrays": audios_processed}, tensor_type=return_tensors
@@ -111,11 +111,6 @@ class MistralCommonVoxtralProcessor(ProcessorMixin):
         feature_extractor: MistralCommonFeatureExtractor,
     ) -> None:
         self.tokenizer = tokenizer.transformers_tokenizer
-
-        # Back-compatibility for Transformers v4
-        if not hasattr(self.tokenizer, "init_kwargs"):
-            self.tokenizer.init_kwargs = {}
-
         self.feature_extractor = feature_extractor
 
         audio_special_ids = self.feature_extractor.audio_encoder.special_ids

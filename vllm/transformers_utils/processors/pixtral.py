@@ -46,26 +46,9 @@ class MistralCommonImageProcessor:
         ncols, nrows = self.mm_encoder._image_to_num_tokens(image)
         return ncols * nrows, nrows, ncols
 
+    # Copied from Transformers (Apache-2.0):
+    # https://github.com/huggingface/transformers/blob/d20946079fd422335fbae3eeb98b7cd88334612f/src/transformers/image_processing_base.py#L473
     def fetch_images(self, image_url_or_urls):
-        """HF-compatible duck-typed ``fetch_images``.
-
-        Mirrors :meth:`transformers.image_processing_base.ImageProcessingMixin.\
-fetch_images` so :class:`transformers.ProcessorMixin.prepare_inputs_layout`
-        (added in transformers 5.10) works on this duck-typed image processor.
-        Older transformers versions never invoke this method, so the addition
-        is a no-op there.
-
-        Accepts the same shapes as the upstream method:
-
-        * already-decoded image (``PIL.Image`` / array) -- returned as-is.
-        * ``str`` URL or path -- delegated to
-          :func:`transformers.image_utils.load_image`.
-        * ``list`` / ``tuple`` of any of the above -- recursed element-wise.
-
-        ``ProcessorMixin.prepare_inputs_layout`` always passes already-decoded
-        images, so the str branch exists only to keep the contract identical to
-        the upstream method.
-        """
         from transformers.image_utils import is_valid_image, load_image
 
         if isinstance(image_url_or_urls, (list, tuple)):
@@ -89,11 +72,6 @@ class MistralCommonPixtralProcessor(ProcessorMixin):
         image_processor: MistralCommonImageProcessor,
     ) -> None:
         self.tokenizer = tokenizer.transformers_tokenizer
-
-        # Back-compatibility for Transformers v4
-        if not hasattr(self.tokenizer, "init_kwargs"):
-            self.tokenizer.init_kwargs = {}
-
         self.image_processor = image_processor
 
         image_special_ids = self.image_processor.mm_encoder.special_ids

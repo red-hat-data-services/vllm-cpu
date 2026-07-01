@@ -98,9 +98,6 @@ class FlashInferCuteDSLExperts(mk.FusedMoEExpertsModular):
     ) -> bool:
         return True
 
-    def supports_expert_map(self) -> bool:
-        return False
-
     def finalize_weight_and_reduce_impl(self) -> mk.TopKWeightAndReduce:
         return TopKWeightAndReduceNoOP()
 
@@ -148,7 +145,6 @@ class FlashInferCuteDSLExperts(mk.FusedMoEExpertsModular):
         # a1q_scale is (M, K//16) float8_e4m3fn from fp4_quantize.
         # The functional API expects x_sf with trailing dim: (M, K//16, 1).
         x_sf = a1q_scale.unsqueeze(-1)
-
 
         flashinfer_cute_dsl_fused_moe_nvfp4(
             x=hidden_states,
