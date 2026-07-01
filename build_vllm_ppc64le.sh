@@ -23,7 +23,7 @@ export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
 
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
-uv pip install -U pip uv setuptools build wheel cmake auditwheel
+uv pip install -U pip uv setuptools build wheel cmake auditwheel typer
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
