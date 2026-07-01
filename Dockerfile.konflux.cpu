@@ -21,12 +21,13 @@ ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 ENV CARGO_HOME=/root/.cargo
 ENV RUSTUP_HOME=/root/.rustup
 ENV PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH
+ENV UV_CACHE_DIR=$HOME/.cache/uv
 
 RUN --mount=type=cache,target=/var/cache/dnf \
     microdnf install -y \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
     && python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV} \
-    && python -m pip install -U pip uv --no-cache
+    && python${PYTHON_VERSION} -m pip install -U pip uv --no-cache
 
 # Important: Copy only bare minimum required for the script to run
 COPY requirements/ requirements/
@@ -122,7 +123,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
     && microdnf update -y && microdnf clean all; \
     python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
-    python -m pip install -U pip uv==0.4.30 --no-cache; \
+    python -m pip install -U pip uv --no-cache; \
     make -C /numactl install; \
     PREFIX=/usr/local make -C /openblas install; \
     uv pip install --no-cache cmake; \
