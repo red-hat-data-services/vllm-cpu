@@ -35,7 +35,7 @@ spec:
     - version=on-pr-{{revision}}
     - io.openshift.tags=odh-vllm-cpu
   - name: rhoai-version
-    value: "2.25.0"
+    value: "3.3.5"
   - name: dockerfile
     value: Dockerfile.konflux.cpu
   - name: path-context
