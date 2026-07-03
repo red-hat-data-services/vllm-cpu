@@ -13,21 +13,23 @@ ARG VLLM_TARGET_DEVICE=cpu
 
 USER root
 WORKDIR /root
-ENV HOME=/root
 
-ENV WHEEL_DIR=/wheelsdir
-ENV VIRTUAL_ENV=/opt/vllm
-ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
-ENV CARGO_HOME=/root/.cargo
-ENV RUSTUP_HOME=/root/.rustup
-ENV PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH
-ENV PCP_DIR=/opt/rh/gcc-toolset-14/root
-ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
+ENV HOME=/root \
+    WHEEL_DIR=/wheelsdir \
+    VIRTUAL_ENV=/opt/vllm \
+    GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 \
+    CARGO_HOME=/root/.cargo \
+    RUSTUP_HOME=/root/.rustup \
+    UV_CACHE_DIR=$HOME/.cache/uv \
+    PCP_DIR=/opt/rh/gcc-toolset-14/root \
+    PATH=/root/.cargo/bin:/root/.rustup/bin:${VIRTUAL_ENV}/bin:$PATH \
+    LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
 
 RUN --mount=type=cache,target=/var/cache/dnf \
     microdnf install -y \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
-    && python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}
+    && python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV} \
+    && python${PYTHON_VERSION} -m pip install -U pip uv --no-cache
 
 # Important: Copy only bare minimum required for the script to run
 COPY requirements/ requirements/
@@ -53,11 +55,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \
       --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
     uv pip install "$(echo ${WHEEL_DIR}/vllm*.whl)[tensorizer]" --refresh
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ "$(uname -m)" = "ppc64le" ]; then source /opt/rh/gcc-toolset-14/enable; fi && \
-    export IBM_DEVPI_URL="https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/" && \
-    uv pip install $WHEEL_DIR/*.whl --extra-index-url $IBM_DEVPI_URL --index-strategy unsafe-best-match --verbose --force-reinstall --refresh
 
 ###############################################################
 #                   FINAL VLLM IMAGE STAGE                    #
@@ -136,15 +133,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN microdnf install --nodocs -y util-linux && \
     microdnf clean all
 
-
-# consume previously built wheels
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,from=builder-base,source=/wheelsdir/,target=/wheelsdir/,ro \
-    export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':') && \
-    # --offline will ensure wheels are picked from uv cache and nothing is pulled from pypi/built from source
-    # vllm wheel should be present in /wheelsdir/ ( at least for ppc64le - and transitive dependencies in uv cache )
-    uv pip install 'setuptools==77.0.3' && \
-    HOME=/root uv pip install /wheelsdir/*.whl --offline
+# Use builder venv in final stage instead of wheel reinstallation
+COPY --from=builder-base /opt/vllm /opt/vllm
 
 ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 

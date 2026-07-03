@@ -6,7 +6,6 @@ export PYTHON_VERSION=3.12
 export WHEEL_DIR=/wheelsdir
 export HOME=/root
 export CURDIR=$(pwd)
-export VIRTUAL_ENV=/opt/venv
 export CARGO_HOME=/root/.cargo
 export RUSTUP_HOME=/root/.rustup
 export PATH=$CARGO_HOME/bin:$RUSTUP_HOME/bin:$PATH
@@ -21,6 +20,18 @@ microdnf install -y \
     clang clang-devel ninja-build perl-core llvm llvm-devel && \
     microdnf clean all
 
+########################################
+# Python 3.12 virtual environment
+########################################
+
+python3.12 -m venv /opt/vllm
+source /opt/vllm/bin/activate
+
+export PATH=/opt/vllm/bin:$PATH
+export VIRTUAL_ENV=/opt/vllm
+
+python --version
+
 pip install --no-cache -U pip setuptools wheel && \
 pip install --no-cache -U uv
 
@@ -28,47 +39,6 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     source "$CARGO_HOME/env" && \
     rustup default stable && \
     rustup show
-
-# -------------------------
-# Apache Arrow (C++ + Python)
-# -------------------------
-
-cd ${CURDIR}
-
-#export PYARROW_VERSION=19.0.1
-git clone --recursive https://github.com/apache/arrow.git
-cd arrow/cpp
-
-mkdir -p release
-cd release
-cmake -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr/local \
-      -DARROW_PYTHON=ON \
-      -DARROW_PARQUET=ON \
-      -DARROW_ORC=ON \
-      -DARROW_FILESYSTEM=ON \
-      -DARROW_WITH_LZ4=ON \
-      -DARROW_WITH_ZSTD=ON \
-      -DARROW_WITH_SNAPPY=ON \
-      -DARROW_JSON=ON \
-      -DARROW_CSV=ON \
-      -DARROW_DATASET=ON \
-      -DARROW_USE_SIMD=OFF \
-      -DARROW_SIMD_LEVEL=NONE \
-      -DARROW_RUNTIME_SIMD_LEVEL=NONE \
-      -DARROW_DEPENDENCY_SOURCE=BUNDLED \
-      ..
-make -j"$(nproc)"
-make install
-cd ../../python
-export PYARROW_PARALLEL=4
-export ARROW_BUILD_TYPE=release
-export ARROW_HOME=/usr/local
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-export PYARROW_BUNDLE_ARROW_CPP=1
-uv pip install -U pip build
-uv pip install -r requirements-build.txt
-python -m build --wheel --outdir "${WHEEL_DIR}"
 
 
 # -------------------------
