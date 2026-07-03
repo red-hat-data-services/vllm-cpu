@@ -13,7 +13,7 @@ cd "$REPO_ROOT"
 ########################################
 
 IBM_DEVPI_URL=${IBM_DEVPI_URL:-"https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/"}
-RHOAI_INDEX_URL=${RHOAI_INDEX_URL:-"https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5-EA2/cpu-ubi9-test/simple/"}
+RHOAI_INDEX_URL=${RHOAI_INDEX_URL:-"https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5-EA2/cpu-ubi9/simple/"}
 
 ########################################
 # wheel dir
@@ -76,7 +76,7 @@ python --version
 pip install -U pip setuptools-rust
 pip install uv
 pip install "setuptools<70" build wheel cmake auditwheel
-uv pip install "setuptools<70" cython meson-python "sympy>=1.13.3" --no-build-isolation
+uv pip install "setuptools<70" cython meson-python pybind11 "sympy>=1.13.3" --no-build-isolation
 
 ########################################
 # Rust
@@ -129,7 +129,7 @@ export LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:${LD_LIBRARY_PATH:-}
 ########################################
 # DevPI Packages
 ########################################
-
+uv pip install numpy==2.3.5 pillow==12.2.0 --extra-index-url "$IBM_DEVPI_URL"
 install_packages() {
     try_install_from_devpi "opencv-python-headless==${OPENCV_VERSION}"
     try_install_from_devpi "torch==${TORCH_VERSION}"
@@ -188,7 +188,7 @@ uv pip install ${WHEEL_DIR}/*.whl \
 ########################################
 
 sed -i.bak -e 's/.*torch.*//g' pyproject.toml requirements/*.txt
-
+sed -i '/fastapi\[standard\]/ s/>= 0\.120\.1/>= 0.120.1, < 0.137/' requirements/common.txt
 # revert back for numba/llvmlite compatibility
 uv pip install "setuptools<70" --no-build-isolation
 
