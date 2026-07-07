@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import types
 from abc import ABC, abstractmethod
 from collections import Counter, defaultdict
 from collections.abc import Awaitable, Callable, Iterable
