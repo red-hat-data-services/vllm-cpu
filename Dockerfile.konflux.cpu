@@ -136,6 +136,9 @@ RUN microdnf install --nodocs -y util-linux && \
 # Use builder venv in final stage instead of wheel reinstallation
 COPY --from=builder-base /opt/vllm /opt/vllm
 
+# Remove maturin from the runtime image
+RUN rm -f /opt/vllm/bin/maturin
+
 ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
 WORKDIR /home/vllm
