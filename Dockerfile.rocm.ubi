@@ -56,7 +56,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         && \
     microdnf clean all
 
-ENV PATH=/opt/rocm/bin:$PATH
+ENV PATH=/opt/rocm/bin:$PATH \
+    ROCM_HOME=/opt/rocm \
+    ROCM_PATH=/opt/rocm
 
 ##################################################################################################
 
