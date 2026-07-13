@@ -816,19 +816,6 @@ class GPUModelRunner(
 
         self.uniform_decode_query_len = 1 + self.num_spec_tokens
 
-        # When spec decode is active, the mamba backend classifies requests
-        # with query_len <= reorder_batch_threshold as "decodes". Prefill
-        # chunks that fall under this threshold get processed via the decode
-        # path, which stores intermediate states at sequential slots. We must
-        # set num_accepted_tokens to the chunk's query_len for those requests
-        # so the next iteration reads from the correct final-state slot.
-        # Prefills that went through the actual prefill path should keep the
-        # default value of 1 (the prefill path stores state at slot 0 only).
-        self.needs_prefill_as_decode_slots: bool = False
-        self.prefill_as_decode_num_tokens = self._make_buffer(
-            self.max_num_reqs, dtype=torch.int32
-        )
-
         # Cudagraph dispatcher for runtime cudagraph dispatching.
         self.cudagraph_dispatcher = CudagraphDispatcher(self.vllm_config)
 
@@ -2416,8 +2403,6 @@ class GPUModelRunner(
                 else 0
             )
 
-            if isinstance(builder, Mamba2AttentionMetadataBuilder):
-                self.needs_prefill_as_decode_slots = True
             extra_attn_metadata_args = {}
             if use_spec_decode and isinstance(
                 builder, (Mamba2AttentionMetadataBuilder, GDNAttentionMetadataBuilder)

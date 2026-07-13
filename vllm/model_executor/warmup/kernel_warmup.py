@@ -145,9 +145,6 @@ def flashinfer_autotune(runner: "GPUModelRunner") -> None:
     Tuning is performed only on rank 0. The resulting cache is broadcast
     to every rank so all ranks dispatch the same kernel tactic.
     """
-    import os
-    import tempfile
-
     import vllm.utils.flashinfer as fi_utils
     from vllm.distributed.parallel_state import get_world_group
 

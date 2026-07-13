@@ -44,8 +44,6 @@ from vllm.tool_parsers.mistral_tool_parser import (
 
 _DUMMY_REQUEST = ChatCompletionRequest(messages=[], model="test")
 
-_DUMMY_REQUEST = ChatCompletionRequest(messages=[], model="test")
-
 
 @pytest.fixture(scope="module")
 def mistral_pre_v11_tokenizer():

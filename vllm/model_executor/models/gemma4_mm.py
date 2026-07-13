@@ -1037,23 +1037,6 @@ class Gemma4ForConditionalGeneration(
             )
             tower_quant = quant_config if quantizable else None
 
-        # Only quantize towers when the quant method supports their
-        # dimensions.  BNB/torchao handle arbitrary sizes; other methods
-        # (Marlin, FP8, …) require dimensions divisible by 64, which
-        # the vision tower (intermediate_size=4304) does not satisfy.
-        if quant_config and quant_config.get_name() in [
-            "bitsandbytes",
-            "torchao",
-        ]:
-            tower_quant = quant_config
-        else:
-            vision_cfg = config.vision_config
-            quantizable = (
-                vision_cfg.hidden_size % 64 == 0
-                and vision_cfg.intermediate_size % 64 == 0
-            )
-            tower_quant = quant_config if quantizable else None
-
         # ---- Vision tower (shared by image and video) ----
         with self._mark_tower_model(vllm_config, {"image", "video"}):
             self.vision_tower = AutoModel.from_config(config=config.vision_config)
