@@ -88,7 +88,7 @@ cd xet-core/hf_xet/
 uv pip install maturin patchelf
 sed -i '/python-source/d' pyproject.toml
 python -m maturin build --release --out "${WHEEL_DIR}"
-uv pip uninstall maturin patchelf
+uv pip uninstall -y maturin patchelf
 
 # -------------------------
 # Build LLVM 15 from source
