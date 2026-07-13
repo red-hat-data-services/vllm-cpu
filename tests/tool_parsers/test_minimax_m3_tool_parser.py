@@ -14,6 +14,8 @@ from vllm.entrypoints.openai.engine.protocol import DeltaMessage
 from vllm.tool_parsers import ToolParserManager
 from vllm.tool_parsers.minimax_m3_tool_parser import MinimaxM3ToolParser
 
+pytest.importorskip("vllm._rust_tool_parser")
+
 pytestmark = [pytest.mark.cpu_test, pytest.mark.skip_global_cleanup]
 
 NS = "]<]minimax[>["
