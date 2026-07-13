@@ -14,7 +14,9 @@ from vllm.model_executor.layers.fused_moe.config import (
     FusedMoEQuantConfig,
     RoutingMethodType,
 )
-from vllm.model_executor.layers.fused_moe.lora_experts_mixin import LoRAExpertsMixin
+from vllm.model_executor.layers.fused_moe.experts.lora_experts_mixin import (
+    LoRAExpertsMixin,
+)
 from vllm.model_executor.layers.fused_moe.topk_weight_and_reduce import (
     TopKWeightAndReduceNoOP,
 )
@@ -30,6 +32,30 @@ from vllm.utils.import_utils import has_triton_kernels
 from ..utils import swiglu_limit_func
 
 logger = init_logger(__name__)
+
+
+def _triton_kernel_moe_supports_current_device() -> bool:
+    # Shared device gate for the OAI Triton MoE expert classes.
+    # Platform-aware to avoid ROCm capability aliasing — cap (9, 0)
+    # matches both gfx90a (verified) and gfx906 (unverified), so we
+    # dispatch on gfx-string helpers instead of the cap tuple on ROCm.
+    p = current_platform
+    if p.is_cuda():
+        cap = p.get_device_capability()
+        # Keep the original `(9, 0) <= cap < (11, 0)` window on
+        # CUDA (covers Hopper SM90 and Blackwell SM100, excludes
+        # SM120) — this PR is ROCm-scoped and the broader CUDA
+        # range was not validated.
+        return cap is not None and (9, 0) <= (cap.major, cap.minor) < (11, 0)
+    if p.is_rocm():
+        from vllm.platforms.rocm import on_gfx1x, on_gfx9
+
+        # gfx9 family: gfx90a (MI200), gfx942/gfx950 (MI3xx);
+        # on_gfx9() already excludes gfx906/gfx908.
+        # gfx1x family: gfx11xx (RDNA3/3.5) and gfx12xx (RDNA4);
+        # on_gfx1x() excludes gfx10xx (RDNA1/RDNA2).
+        return on_gfx9() or on_gfx1x()
+    return False
 
 
 def _patch_make_bitmatrix_metadata() -> None:
@@ -55,17 +81,28 @@ def _patch_make_bitmatrix_metadata() -> None:
     import triton.language as tl
 
     try:
-        from vllm.third_party.triton_kernels.tensor_details import (
-            bitmatrix as _bm,
-        )
-        from vllm.third_party.triton_kernels.tensor_details.bitmatrix import (
-            BitmatrixMetadata,
-            _keyed_add,
-            cdiv,
-        )
-        from vllm.third_party.triton_kernels.tensor_details.bitmatrix_details.sum_bitmatrix_rows import (  # noqa: E501
-            sum_bitmatrix_rows,
-        )
+        if current_platform.is_rocm():
+            from triton_kernels.tensor_details import bitmatrix as _bm
+            from triton_kernels.tensor_details.bitmatrix import (
+                BitmatrixMetadata,
+                _keyed_add,
+                cdiv,
+            )
+            from triton_kernels.tensor_details.bitmatrix_details.sum_bitmatrix_rows import (  # noqa: E501
+                sum_bitmatrix_rows,
+            )
+        else:
+            from vllm.third_party.triton_kernels.tensor_details import (
+                bitmatrix as _bm,
+            )
+            from vllm.third_party.triton_kernels.tensor_details.bitmatrix import (
+                BitmatrixMetadata,
+                _keyed_add,
+                cdiv,
+            )
+            from vllm.third_party.triton_kernels.tensor_details.bitmatrix_details.sum_bitmatrix_rows import (  # noqa: E501
+                sum_bitmatrix_rows,
+            )
     except ImportError:
         return
 
@@ -547,17 +584,7 @@ class BaseOAITritonExperts(mk.FusedMoEExpertsModular):
 
     @staticmethod
     def _supports_current_device() -> bool:
-        p = current_platform
-        if not p.is_cuda_alike():
-            return False
-        cap = p.get_device_capability()
-        if cap is None:
-            return False
-        # (9,0) <= cap < (11,0) covers CUDA SM90 (Hopper), SM100+ (Blackwell)
-        # and ROCm gfx942/gfx950 (which map to 9.4/9.5).
-        if not has_triton_kernels():
-            return False
-        return (9, 0) <= (cap.major, cap.minor) < (11, 0)
+        return _triton_kernel_moe_supports_current_device() and has_triton_kernels()
 
     @staticmethod
     def _supports_no_act_and_mul() -> bool:
@@ -579,9 +606,6 @@ class BaseOAITritonExperts(mk.FusedMoEExpertsModular):
 
     @staticmethod
     def _supports_parallel_config(moe_parallel_config: FusedMoEParallelConfig) -> bool:
-        return True
-
-    def supports_expert_map(self) -> bool:
         return True
 
     def moe_problem_size(
@@ -731,6 +755,7 @@ class UnfusedOAITritonExperts(LoRAExpertsMixin, BaseOAITritonExperts):
             MoEActivation.GELU,
             MoEActivation.SWIGLUOAI,
             MoEActivation.SWIGLUSTEP,
+            MoEActivation.SWIGLUOAI_UNINTERLEAVE,
         ]
 
     @staticmethod
@@ -763,6 +788,7 @@ class UnfusedOAITritonExperts(LoRAExpertsMixin, BaseOAITritonExperts):
         activation: MoEActivation,
         output: torch.Tensor,
         input: torch.Tensor,
+        **kwargs,
     ) -> None:
         quant_config = self.quant_config or FUSED_MOE_UNQUANTIZED_CONFIG
         if activation == MoEActivation.SWIGLUOAI:
@@ -785,6 +811,19 @@ class UnfusedOAITritonExperts(LoRAExpertsMixin, BaseOAITritonExperts):
                 output,
                 input,
                 quant_config.gemm1_clamp_limit,
+            )
+        elif activation == MoEActivation.SWIGLUOAI_UNINTERLEAVE:
+            assert quant_config.gemm1_clamp_limit is not None
+            alpha = (
+                quant_config.gemm1_alpha
+                if quant_config.gemm1_alpha is not None
+                else 1.0
+            )
+            beta = (
+                quant_config.gemm1_beta if quant_config.gemm1_beta is not None else 0.0
+            )
+            torch.ops._C.silu_and_mul_with_clamp(
+                output, input, quant_config.gemm1_clamp_limit, alpha, beta
             )
         else:
             super().activation(activation, output, input)
@@ -961,17 +1000,7 @@ class OAITritonMxfp4ExpertsMonolithic(mk.FusedMoEExpertsMonolithic):
 
     @staticmethod
     def _supports_current_device() -> bool:
-        p = current_platform
-        if not p.is_cuda_alike():
-            return False
-        cap = p.get_device_capability()
-        if cap is None:
-            return False
-        # (9,0) <= cap < (11,0) covers CUDA SM90 (Hopper), SM100+ (Blackwell)
-        # and ROCm gfx942/gfx950 (which map to 9.4/9.5).
-        if not has_triton_kernels():
-            return False
-        return (9, 0) <= (cap.major, cap.minor) < (11, 0)
+        return _triton_kernel_moe_supports_current_device() and has_triton_kernels()
 
     @staticmethod
     def _supports_no_act_and_mul() -> bool:
@@ -1017,9 +1046,6 @@ class OAITritonMxfp4ExpertsMonolithic(mk.FusedMoEExpertsMonolithic):
         router_logits_dtype: torch.dtype | None,
         routing_method: RoutingMethodType,
     ) -> bool:
-        return True
-
-    def supports_expert_map(self) -> bool:
         return True
 
     @property

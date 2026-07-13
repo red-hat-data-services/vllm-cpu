@@ -32,6 +32,7 @@ from vllm.model_executor.layers.linear import (
     ReplicatedLinear,
     RowParallelLinear,
 )
+from vllm.model_executor.models.utils import maybe_prefix
 from vllm.transformers_utils.config import is_rope_parameters_nested
 
 if TYPE_CHECKING:
@@ -100,8 +101,6 @@ Style = Literal[
     "replicate",
     "colwise_gather_output",
     "rowwise_split_input",
-    "colwise_rep",
-    "rowwise_rep",
 ]
 
 
@@ -130,12 +129,8 @@ def replace_linear_class(
         "colwise": (ColumnParallelLinear, {}),
         "rowwise": (RowParallelLinear, {}),
         "replicate": (ReplicatedLinear, {}),
-        # Transformers v5
         "colwise_gather_output": (ColumnParallelLinear, {"gather_output": True}),
         "rowwise_split_input": (RowParallelLinear, {"input_is_parallel": False}),
-        # Transformers v4
-        "colwise_rep": (ColumnParallelLinear, {"gather_output": True}),
-        "rowwise_rep": (RowParallelLinear, {"input_is_parallel": False}),
     }.get(style, (ReplicatedLinear, {}))
 
     return vllm_linear_cls(
@@ -147,34 +142,6 @@ def replace_linear_class(
         return_bias=False,
         **vllm_linear_kwargs,
     )
-
-
-def recursive_replace_linear(
-    model: nn.Module,
-    quant_config: "QuantizationConfig | None",
-    prefix: str = "",
-):
-    """Recursively replace linear modules in the model as needed."""
-    from vllm.model_executor.models.utils import maybe_prefix
-
-    def _recursive_replace(module: nn.Module, prefix: str):
-        for child_name, child_module in module.named_children():
-            new_module = child_module
-            qual_name = maybe_prefix(prefix, child_name)
-            if isinstance(child_module, nn.Linear):
-                style = "replicate"
-                new_module = replace_linear_class(
-                    child_module,
-                    style,
-                    quant_config,
-                    prefix=qual_name,
-                )
-            else:
-                _recursive_replace(child_module, prefix=qual_name)
-            if new_module is not child_module:
-                setattr(module, child_name, new_module)
-
-    _recursive_replace(model, prefix=prefix)
 
 
 TorchConv = nn.Conv2d | nn.Conv3d
@@ -253,6 +220,34 @@ def replace_rms_norm_class(rms_norm: nn.Module, hidden_size: int) -> RMSNorm:
         # No weight, fall back to weightless RMSNorm
         kwargs["has_weight"] = False
     return RMSNorm(**kwargs)
+
+
+def recursive_replace_linear(
+    model: nn.Module,
+    quant_config: "QuantizationConfig | None",
+    prefix: str = "",
+):
+    """Recursively replace linear modules in the model as needed."""
+
+    def _recursive_replace(module: nn.Module, prefix: str):
+        for child_name, child_module in module.named_children():
+            new_module = child_module
+            qual_name = maybe_prefix(prefix, child_name)
+            # Replace modules as needed
+            if isinstance(child_module, nn.Linear):
+                style = "replicate"
+                new_module = replace_linear_class(
+                    child_module,
+                    style,
+                    quant_config,
+                    prefix=qual_name,
+                )
+            else:
+                _recursive_replace(child_module, prefix=qual_name)
+            if new_module is not child_module:
+                setattr(module, child_name, new_module)
+
+    _recursive_replace(model, prefix=prefix)
 
 
 def log_replacement(name: str, old_module: nn.Module, new_module: nn.Module):
