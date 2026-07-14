@@ -178,6 +178,9 @@ class RequestState:
 
         self.stats = RequestStateStats(arrival_time=arrival_time) if log_stats else None
 
+        # Routed experts accumulation (prompt + sample chunks)
+        self.routed_experts_chunks: list[np.ndarray] = []
+
         # Stream Interval
         self.stream_interval = stream_interval
         self.sent_tokens_offset = 0  # Offset of sent tokens
@@ -276,7 +279,6 @@ class RequestState:
         finish_reason: FinishReason | None,
         stop_reason: int | str | None,
         kv_transfer_params: dict[str, Any] | None = None,
-        routed_experts: np.ndarray | None = None,
     ) -> RequestOutput | PoolingRequestOutput | None:
         finished = finish_reason is not None
         final_only = self.output_kind == RequestOutputKind.FINAL_ONLY
@@ -317,25 +319,7 @@ class RequestState:
                 finished,
             )
 
-        # Split routing data into prompt and generation portions.
-        # Prompt routing lives on RequestOutput (shared across n>1
-        # completions); generation routing lives on each CompletionOutput.
-        prompt_routed_experts = None
-        gen_routed_experts = None
-        if routed_experts is not None:
-            prompt_len = len(self.prompt_token_ids) if self.prompt_token_ids else 0
-            num_gen = (
-                self.detokenizer.num_output_tokens()
-                if self.detokenizer is not None
-                else None
-            )
-            prompt_routed_experts, gen_routed_experts = split_routed_experts(
-                routed_experts, prompt_len, num_gen
-            )
-
-        output = self._new_completion_output(
-            new_token_ids, finish_reason, stop_reason, gen_routed_experts
-        )
+        output = self._new_completion_output(new_token_ids, finish_reason, stop_reason)
 
         if self.parent_req is None:
             outputs = [output]
@@ -403,7 +387,6 @@ class RequestState:
         token_ids: list[int],
         finish_reason: FinishReason | None,
         stop_reason: int | str | None,
-        routed_experts: np.ndarray | None = None,
     ) -> CompletionOutput:
         assert self.detokenizer is not None
         assert self.logprobs_processor is not None
@@ -419,6 +402,11 @@ class RequestState:
         logprobs = self.logprobs_processor.logprobs
         if delta and logprobs:
             logprobs = logprobs[-len(token_ids) :]
+
+        # Concatenate routed experts on finish
+        routed_experts = None
+        if finished and self.routed_experts_chunks:
+            routed_experts = np.concatenate(self.routed_experts_chunks, axis=0)
 
         return CompletionOutput(
             index=self.request_index,
@@ -641,7 +629,10 @@ class OutputProcessor:
             finish_reason = engine_core_output.finish_reason
             stop_reason = engine_core_output.stop_reason
             kv_transfer_params = engine_core_output.kv_transfer_params
-            routed_experts = engine_core_output.routed_experts
+            if engine_core_output.routed_experts is not None:
+                req_state.routed_experts_chunks.append(
+                    engine_core_output.routed_experts
+                )
 
             if req_state.is_prefilling:
                 if engine_core_output.prefill_stats is not None:
@@ -672,7 +663,6 @@ class OutputProcessor:
                 finish_reason,
                 stop_reason,
                 kv_transfer_params,
-                routed_experts,
             ):
                 if req_state.streaming_input:
                     request_output.finished = False

@@ -40,7 +40,6 @@ from vllm.entrypoints.openai.engine.protocol import (
 )
 from vllm.entrypoints.openai.responses.protocol import ResponsesRequest
 from vllm.logger import init_logger
-from vllm.reasoning.mistral_reasoning_parser import MistralReasoningParser
 from vllm.sampling_params import StructuredOutputsParams
 from vllm.tokenizers import TokenizerLike
 from vllm.tokenizers.mistral import MistralTokenizer
@@ -97,19 +96,6 @@ def _is_pre_v11_tokeniser(model_tokenizer: TokenizerLike) -> bool:
     # which indicates a v11+ equivalent tokenizer
     vocab: dict[str, int] = getattr(model_tokenizer, "get_vocab", lambda: {})()
     return "[ARGS]" not in vocab
-
-
-@dataclass
-class MistralStreamingResult:
-    r"""Encapsulates the mutable state returned from
-    `MistralToolParser.extract_maybe_reasoning_and_tool_streaming`.
-    """
-
-    delta_message: DeltaMessage | None
-    reasoning_ended: bool
-    tools_called: bool
-    current_text: str
-    current_token_ids: list[int]
 
 
 class MistralToolParser(ToolParser):
@@ -536,7 +522,7 @@ class MistralToolParser(ToolParser):
         return ExtractedToolCallInformation(
             tools_called=True,
             tool_calls=mistral_tool_calls,
-            content=content if len(content) > 0 else None,
+            content=content if content.strip() else None,
         )
 
     def extract_tool_calls_streaming(
@@ -680,12 +666,6 @@ class MistralToolParser(ToolParser):
                         ).model_dump(exclude_none=True),
                     )
                 ]
-                # Track streamed arguments for serving_chat.py's
-                # autocomplete logic
-                if delta_arguments and self.current_tool_id < len(
-                    self.streamed_args_for_tool
-                ):
-                    self.streamed_args_for_tool[self.current_tool_id] += delta_arguments
                 self.current_tool_name = None
             if next_function_text:
                 ret += self._generate_delta_tool_call(next_function_text)
@@ -863,12 +843,6 @@ class MistralToolParser(ToolParser):
                     # It's the first chunk of arg. let's lstrip it
                     current_tool_call.function.arguments = (
                         current_tool_call.function.arguments.lstrip()
-                    )
-                # Track streamed arguments for serving_chat.py's
-                # autocomplete logic
-                if self.current_tool_id < len(self.streamed_args_for_tool):
-                    self.streamed_args_for_tool[self.current_tool_id] += (
-                        delta_to_be_parsed
                     )
 
         if current_tool_call_modified:

@@ -131,8 +131,8 @@ target "hpu" {
   dockerfile = "Dockerfile.hpu.ubi"
 
   args = {
-    SYNAPSE_VERSION = "1.23.0"
-    SYNAPSE_REVISION = "695"
+    SYNAPSE_VERSION = "1.24.0"
+    SYNAPSE_REVISION = "1007"
   }
 
   tags = [
