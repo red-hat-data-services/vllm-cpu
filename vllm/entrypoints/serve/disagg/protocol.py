@@ -197,26 +197,6 @@ class GenerateStreamResponse(BaseModel):
     usage: UsageInfo | None = Field(default=None)
 
 
-class GenerateResponseStreamChoice(BaseModel):
-    index: int
-    logprobs: ChatCompletionLogProbs | None = None
-    finish_reason: str | None = None
-    token_ids: list[int] | None = None
-
-
-class GenerateStreamResponse(BaseModel):
-    request_id: str = Field(
-        default_factory=lambda: f"{random_uuid()}",
-        description=(
-            "The request_id related to this request. If the caller does "
-            "not set it, a random_uuid will be generated. This id is used "
-            "through out the inference process and return in response."
-        ),
-    )
-    choices: list[GenerateResponseStreamChoice]
-    usage: UsageInfo | None = Field(default=None)
-
-
 class GenerateResponse(BaseModel):
     request_id: str = Field(
         default_factory=lambda: f"{random_uuid()}",

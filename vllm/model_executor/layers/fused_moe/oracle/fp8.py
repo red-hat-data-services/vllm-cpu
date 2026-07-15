@@ -216,13 +216,6 @@ def backend_to_kernel_cls(
 
         return [CPUExpertsFp8]
 
-    elif backend == Fp8MoeBackend.CPU:
-        from vllm.model_executor.layers.fused_moe.experts.cpu_moe import (
-            CPUExpertsFp8,
-        )
-
-        return [CPUExpertsFp8]
-
     else:
         raise ValueError(f"Unknown FP8 MoE backend: {backend.value}")
 
@@ -526,14 +519,6 @@ def make_fp8_moe_quant_config(
             gemm1_alpha=gemm1_alpha,
             gemm1_beta=gemm1_beta,
             gemm1_clamp_limit=swiglu_limit,
-        )
-
-    # CPU is mixed precision W8A16 config.
-    if fp8_backend == Fp8MoeBackend.CPU:
-        return fp8_w8a16_moe_quant_config(
-            w1_scale=w1_scale,
-            w2_scale=w2_scale,
-            block_shape=block_shape,
         )
 
     # Flashinfer CUTLASS per-tensor uses single dq scale

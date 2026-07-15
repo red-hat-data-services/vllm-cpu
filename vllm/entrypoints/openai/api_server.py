@@ -218,12 +218,6 @@ def build_app(
 
         elastic_ep_attach_router(app)
 
-        from vllm.entrypoints.openai.generative_scoring.api_router import (
-            register_generative_scoring_api_router,
-        )
-
-        register_generative_scoring_api_router(app)
-
     if "generate" in supported_tasks or "render" in supported_tasks:
         from vllm.entrypoints.serve.render.api_router import (
             attach_router as attach_render_router,
@@ -358,23 +352,6 @@ async def init_app_state(
         else {}
     )
     lora_modules = process_lora_modules(args.lora_modules, default_mm_loras)
-
-    # Merge default_mm_loras into the static lora_modules
-    default_mm_loras = (vllm_config.lora_config.default_mm_loras
-                        if vllm_config.lora_config is not None else {})
-
-    lora_modules = args.lora_modules
-    if default_mm_loras:
-        default_mm_lora_paths = [
-            LoRAModulePath(
-                name=modality,
-                path=lora_path,
-            ) for modality, lora_path in default_mm_loras.items()
-        ]
-        if args.lora_modules is None:
-            lora_modules = default_mm_lora_paths
-        else:
-            lora_modules += default_mm_lora_paths
 
     state.openai_serving_models = OpenAIServingModels(
         engine_client=engine_client,

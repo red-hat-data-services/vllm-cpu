@@ -880,39 +880,6 @@ class FlexAttentionMetadataBuilder(AttentionMetadataBuilder[FlexAttentionMetadat
         mode = self.vllm_config.compilation_config.cudagraph_mode
         return mode is not None and mode.has_full_cudagraphs()
 
-        self.max_model_len = self.model_config.max_model_len
-        max_num_seqs = vllm_config.scheduler_config.max_num_seqs
-        max_num_batched_tokens = vllm_config.scheduler_config.max_num_batched_tokens
-        self.max_num_query_groups = cdiv(max_num_batched_tokens, self.q_block_size)
-        max_num_pages_per_seq = cdiv(self.max_model_len, self.block_size)
-        self.max_num_kv_indices = self.q_block_size * max_num_pages_per_seq
-        self.persistent_kv_num_blocks = torch.empty(
-            self.max_num_query_groups, dtype=torch.int32, device=device
-        )
-        self.persistent_offset_tensor = torch.empty(
-            max_num_seqs, dtype=torch.int32, device=device
-        )
-        self.persistent_doc_ids = torch.empty(
-            max_num_batched_tokens, dtype=torch.int32, device=device
-        )
-
-        # initialize later when we can access block_table
-        self.persistent_physical_to_logical = None
-        self.persistent_kv_indices = None
-
-    def build_for_cudagraph_capture(
-        self, common_attn_metadata: CommonAttentionMetadata
-    ) -> FlexAttentionMetadata:
-        # Use actual max_seq_len (not max_model_len) to avoid torch.compile
-        # recompilation during CUDA graph capture.
-        assert common_attn_metadata.seq_lens_cpu_upper_bound is not None
-        common_attn_metadata.max_seq_len = int(
-            common_attn_metadata.seq_lens_cpu_upper_bound.max().item()
-        )
-        return self.build(
-            common_prefix_len=0, common_attn_metadata=common_attn_metadata
-        )
-
     def build(
         self,
         common_prefix_len: int,

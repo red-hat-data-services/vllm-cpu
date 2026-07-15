@@ -11,9 +11,6 @@ import numpy as np
 import torch
 
 from vllm.lora.request import LoRARequest
-from vllm.model_executor.layers.fused_moe.routed_experts_capturer import (
-    split_routed_experts,
-)
 from vllm.outputs import (
     STREAM_FINISHED,
     CompletionOutput,
@@ -330,11 +327,7 @@ class RequestState:
             external_req_id = self.parent_req.external_req_id
 
         return self._new_request_output(
-            external_req_id,
-            outputs,
-            finished,
-            kv_transfer_params,
-            prompt_routed_experts,
+            external_req_id, outputs, finished, kv_transfer_params
         )
 
     def _new_request_output(
@@ -343,7 +336,6 @@ class RequestState:
         outputs: list[CompletionOutput] | list[PoolingOutput],
         finished: bool,
         kv_transfer_params: dict[str, Any] | None = None,
-        prompt_routed_experts: np.ndarray | None = None,
     ) -> RequestOutput | PoolingRequestOutput:
         # If prompt embeds were used, put placeholder prompt token ids
         prompt_token_ids = self.prompt_token_ids
@@ -379,7 +371,6 @@ class RequestState:
             kv_transfer_params=kv_transfer_params,
             num_cached_tokens=self.num_cached_tokens,
             metrics=self.stats,
-            prompt_routed_experts=prompt_routed_experts,
         )
 
     def _new_completion_output(

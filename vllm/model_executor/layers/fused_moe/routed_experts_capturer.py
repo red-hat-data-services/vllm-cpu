@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+# Adapted from
+# https://github.com/sgl-project/sglang/blob/bed301a5acaa9577c9aa706468bdf242f6a43051/python/sglang/srt/layers/moe/routed_experts_capturer.py
+
 from __future__ import annotations
 
 import logging
 
 import numpy as np
 import torch
-import torch.distributed
 
 from vllm.config import VllmConfig
 from vllm.distributed.parallel_state import get_tp_group

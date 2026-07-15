@@ -15,9 +15,6 @@ from vllm.entrypoints.serve.utils.api_utils import (
 from .protocol import CohereEmbedRequest, EmbeddingRequest
 from .serving import ServingEmbedding
 
-from .protocol import CohereEmbedRequest, EmbeddingRequest
-from .serving import ServingEmbedding
-
 router = APIRouter()
 
 

@@ -150,28 +150,6 @@ class DeepSeekV32ToolParser(ToolParser):
                 return inner
         return param_dict
 
-    @staticmethod
-    def _repair_param_dict(
-        param_dict: dict[str, Any],
-        param_config: dict[str, dict],
-    ) -> dict[str, Any]:
-        """Unwrap single 'arguments' / 'input' wrappers when the wrapper
-        is not part of the requested tool schema and the wrapped object
-        matches the schema fields."""
-        allowed = set(param_config.keys())
-        for wrapper in ("arguments", "input"):
-            if set(param_dict.keys()) != {wrapper} or wrapper in allowed:
-                continue
-            inner = param_dict[wrapper]
-            if isinstance(inner, str):
-                try:
-                    inner = json.loads(inner)
-                except json.JSONDecodeError:
-                    return param_dict
-            if isinstance(inner, dict) and set(inner.keys()).issubset(allowed):
-                return inner
-        return param_dict
-
     def _convert_params_with_schema(
         self,
         function_name: str,
@@ -544,24 +522,6 @@ class DeepSeekV32ToolParser(ToolParser):
 
             self._append_param_prefix(tool_call_deltas, index, name, as_string=False)
             self._active_param_mode = "raw"
-
-    def _extract_content(self, current_text: str) -> str | None:
-        """Return unsent non-tool-call text, or None.
-
-        Holds back any suffix that could be a partial start marker
-        so that split markers are never leaked as content.
-        """
-        if self.tool_call_start_token not in current_text:
-            overlap = partial_tag_overlap(current_text, self.tool_call_start_token)
-            sendable_idx = len(current_text) - overlap
-        else:
-            sendable_idx = current_text.index(self.tool_call_start_token)
-
-        if sendable_idx > self._sent_content_idx:
-            content = current_text[self._sent_content_idx : sendable_idx]
-            self._sent_content_idx = sendable_idx
-            return content
-        return None
 
     def extract_tool_calls_streaming(
         self,

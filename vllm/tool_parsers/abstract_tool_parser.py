@@ -16,7 +16,6 @@ from openai.types.responses.function_tool import FunctionTool
 
 import vllm.envs as envs
 from vllm.entrypoints.openai.chat_completion.protocol import (
-    ChatCompletionNamedToolChoiceParam,
     ChatCompletionRequest,
     ChatCompletionToolsParam,
 )
@@ -27,7 +26,6 @@ from vllm.entrypoints.openai.engine.protocol import (
 from vllm.entrypoints.openai.responses.protocol import (
     ResponsesRequest,
 )
-from vllm.envs import VLLM_ENFORCE_STRICT_TOOL_CALLING
 from vllm.logger import init_logger
 from vllm.sampling_params import (
     StructuredOutputsParams,

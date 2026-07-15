@@ -64,19 +64,6 @@ class TransferJob:
 
 
 @dataclass
-class TransferJob:
-    """A transfer job bundling request context with transfer spec.
-
-    Used for both loads and stores, keyed by scheduler-assigned job ID.
-    The worker reports the job ID back when the transfer finishes,
-    and the scheduler processes the completion.
-    """
-
-    req_id: ReqId
-    transfer_spec: TransferSpec
-
-
-@dataclass
 class OffloadingConnectorMetadata(KVConnectorMetadata):
     # Keyed by scheduler-assigned job IDs.
     load_jobs: dict[int, TransferJob]

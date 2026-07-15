@@ -20,7 +20,6 @@ from vllm.model_executor.layers.quantization.utils.w8a8_utils import (
 )
 from vllm.model_executor.utils import set_weight_attrs
 from vllm.platforms import current_platform
-from vllm.utils.torch_utils import direct_register_custom_op
 
 from .BlockScaledMMLinearKernel import Fp8BlockScaledMMLinearKernel
 from .ScaledMMLinearKernel import (

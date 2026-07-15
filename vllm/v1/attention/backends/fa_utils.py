@@ -201,10 +201,6 @@ def flash_attn_supports_quant_query_input() -> bool:
     return not current_platform.is_xpu()
 
 
-def flash_attn_supports_quant_query_input() -> bool:
-    return not current_platform.is_xpu()
-
-
 def flash_attn_supports_sinks() -> bool:
     if current_platform.is_xpu():
         return True

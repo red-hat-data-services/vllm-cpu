@@ -41,12 +41,6 @@ class AttentionCGSupportInfo:
     min_cg_attn_backend: str | None = None
 
 
-@dataclass(frozen=True)
-class AttentionCGSupportInfo:
-    min_cg_support: AttentionCGSupport = AttentionCGSupport.ALWAYS
-    min_cg_attn_backend: str | None = None
-
-
 def get_kv_cache_spec(vllm_config: VllmConfig) -> dict[str, KVCacheSpec]:
     kv_cache_spec: dict[str, KVCacheSpec] = {}
     layer_type = cast(type[Any], AttentionLayerBase)

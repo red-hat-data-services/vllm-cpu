@@ -821,7 +821,6 @@ class AutoGPTQMoEMethod(FusedMoEMethodBase):
             router_logits=router_logits,
             activation=layer.activation,
             global_num_experts=layer.global_num_experts,
-            apply_router_weight_on_input=layer.apply_router_weight_on_input,
             expert_map=layer.expert_map,
             apply_router_weight_on_input=layer.apply_router_weight_on_input,
             num_expert_group=layer.num_expert_group,

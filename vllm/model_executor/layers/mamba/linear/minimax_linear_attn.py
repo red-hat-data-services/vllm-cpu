@@ -3,7 +3,6 @@
 
 import math
 from collections.abc import Callable
-from functools import partial
 
 import torch
 import torch.nn.functional as F
@@ -22,7 +21,6 @@ from vllm.model_executor.layers.minimax_rms_norm import MiniMaxText01RMSNormTP
 from vllm.utils.torch_utils import direct_register_custom_op
 from vllm.v1.attention.backend import AttentionMetadata
 from vllm.v1.attention.backends.linear_attn import LinearAttentionMetadata
-from vllm.v1.attention.backends.registry import MambaAttentionBackendEnum
 
 
 def clear_linear_attention_cache_for_new_sequences(

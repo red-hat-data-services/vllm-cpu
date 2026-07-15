@@ -1166,35 +1166,6 @@ class Worker(WorkerBase):
         self._weight_update_active = False
         self._is_checkpoint_format = True
 
-    def finish_weight_update(self) -> None:
-        """
-        Finish the current weight update.
-
-        For checkpoint format, this runs layerwise postprocessing.
-        Uses the is_checkpoint_format state stored by start_weight_update.
-        """
-        self._check_weight_transfer_engine()
-
-        if not self._weight_update_active:
-            raise RuntimeError(
-                "start_weight_update must be called before finish_weight_update."
-            )
-
-        is_checkpoint_format = self._is_checkpoint_format
-
-        if is_checkpoint_format:
-            from vllm.model_executor.model_loader.reload import (
-                finalize_layerwise_reload,
-            )
-
-            model = self.model_runner.model
-            with torch.device(self.device):
-                finalize_layerwise_reload(model, self.model_config)
-
-        # Reset state
-        self._weight_update_active = False
-        self._is_checkpoint_format = True
-
     def shutdown(self) -> None:
         gc.unfreeze()
 

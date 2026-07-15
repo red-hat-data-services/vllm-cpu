@@ -293,8 +293,6 @@ def fused_topk_bias(
         scores = gating_output.softmax(dim=-1)
     elif scoring_func == "sigmoid":
         scores = gating_output.sigmoid()
-    elif scoring_func == "sqrtsoftplus":
-        scores = F.softplus(gating_output).sqrt()
     else:
         raise ValueError(f"Unsupported scoring function: {scoring_func}")
     if e_score_correction_bias is not None:

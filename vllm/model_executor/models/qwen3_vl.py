@@ -2352,10 +2352,8 @@ class Qwen3VLForConditionalGeneration(
             select_token_id=self.is_multimodal_pruning_enabled,
         )
 
-        repl_token_ids = torch.tensor(video_repl.full)
-        embed_token_id = _cached_tensor(
-            self.config.video_token_id, repl_token_ids.device
-        )
+        repl_token_ids = torch.tensor(video_repl.full, device=device)
+        embed_token_id = _cached_tensor(self.config.video_token_id, device=device)
         is_video_embed = torch.isin(repl_token_ids, embed_token_id)
 
         # Get text embeddings for indicator tokens (has only `visual_dim``).

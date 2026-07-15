@@ -59,14 +59,7 @@ from vllm.lora.layers import LoRAMapping, LoRAMappingType
 from vllm.model_executor.layers.attention import Attention, MLAAttention
 from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 from vllm.model_executor.layers.fused_moe.routed_experts_capturer import (
-    extract_routed_experts_for_current_batch,
-    free_routing_buffers,
-    get_global_experts_capturer,
-    init_routed_experts_capturer_with_shared_cache,
-    issue_routing_d2h_copy,
-)
-from vllm.model_executor.layers.mamba.ops.ssu_dispatch import (
-    initialize_mamba_ssu_backend,
+    RoutedExpertsCapturer,
 )
 from vllm.model_executor.layers.mamba.ops.ssu_dispatch import (
     initialize_mamba_ssu_backend,
@@ -1156,12 +1149,6 @@ class GPUModelRunner(
         # and handling the second as a new request.
         for req_id in scheduler_output.finished_req_ids:
             self.input_batch.remove_request(req_id)
-
-        if self.routed_experts_initialized:
-            free_routing_buffers(
-                scheduler_output.finished_req_ids,
-                scheduler_output.preempted_req_ids,
-            )
 
         # Zero GPU memory for freshly allocated cache blocks to prevent
         # stale NaN/data from corrupting attention or SSM computation.
@@ -4608,17 +4595,6 @@ class GPUModelRunner(
                 self._draft_prob_req_ids = None
                 self._copy_draft_token_ids_to_cpu(scheduler_output, zeros_only=True)
 
-            if not input_fits_in_drafter:
-                # Zero out draft tokens so the scheduler doesn't schedule
-                # stale drafts from the previous step.
-                # For Nemotron-H: it is necessary to zero out the draft tokens,
-                # otherwise the stale tokens will corrupt Mamba recurrent
-                # state and logprobs for sequences near max_model_len.
-                self._draft_token_ids = torch.zeros(
-                    1, device=self.device, dtype=torch.int32
-                ).expand(len(self.input_batch.req_ids), self.num_spec_tokens)
-                self._copy_draft_token_ids_to_cpu(scheduler_output, zeros_only=True)
-
         with record_function_or_nullcontext("gpu_model_runner: bookkeep"):
             (
                 num_nans_in_logits,
@@ -6650,8 +6626,6 @@ class GPUModelRunner(
                 "Skipping CUDA graph capture. To turn on CUDA graph capture, "
                 "ensure `cudagraph_mode` was not manually set to `NONE`"
             )
-            if self.model_config.enable_return_routed_experts:
-                self.init_routed_experts_capturer()
             return 0
 
         # Initialize encoder CUDA graph manager if enabled.
@@ -6660,14 +6634,6 @@ class GPUModelRunner(
         compilation_counter.num_gpu_runner_capture_triggers += 1
 
         start_time = time.perf_counter()
-
-        # Initialize the routed experts capturer once before any CUDA graph
-        # capture.  Must happen before graphs are captured so the buffer
-        # address is baked into the graph.  Do NOT call this inside
-        # _capture_cudagraphs() -- creating the capturer twice replaces
-        # the device buffer, causing graphs to write to a dead buffer.
-        if self.model_config.enable_return_routed_experts:
-            self.init_routed_experts_capturer()
 
         # Trigger CUDA graph capture for specific shapes.
         # Capture the large shapes first so that the smaller shapes
@@ -7022,46 +6988,6 @@ class GPUModelRunner(
             self.reorder_batch_threshold = None
             return
         self.reorder_batch_threshold = reduce(min_none_high, reorder_batch_thresholds)  # type: ignore[assignment]
-
-    def _set_mm_prefix_range_for_metadata(
-        self,
-        attn_metadata: Any,
-        req_doc_ranges: dict[int, list[tuple[int, int]]],
-    ) -> None:
-        """Set mm_prefix_range for all attention metadata objects.
-
-        This method handles both list and non-list attention metadata,
-        computing mm_prefix_range_tensor once and sharing it across all
-        metadata objects to avoid redundant host-to-device transfers.
-        """
-        from vllm.v1.attention.backends.triton_attn import (
-            TritonAttentionMetadata,
-        )
-
-        # Get all metadata objects from either list or dict structure
-        metadata_list = []
-        if isinstance(attn_metadata, list):
-            for ub_metadata in attn_metadata:
-                metadata_list.extend(ub_metadata.values())
-        else:
-            metadata_list.extend(attn_metadata.values())
-
-        # Set mm_prefix_range for all metadata and compute tensor once
-        shared_tensor = None
-        for metadata in metadata_list:
-            metadata.mm_prefix_range = req_doc_ranges  # type: ignore[attr-defined]
-
-            # Only compute tensor for TritonAttentionMetadata
-            if isinstance(metadata, TritonAttentionMetadata):
-                if shared_tensor is None:
-                    shared_tensor = (
-                        TritonAttentionMetadata.compute_mm_prefix_range_tensor(
-                            req_doc_ranges,
-                            metadata.seq_lens.shape[0],  # type: ignore[attr-defined]
-                            metadata.seq_lens.device,  # type: ignore[attr-defined]
-                        )
-                    )
-                metadata.mm_prefix_range_tensor = shared_tensor
 
     def may_reinitialize_input_batch(
         self, kv_cache_config: KVCacheConfig, kernel_block_sizes: list[int]
@@ -7532,7 +7458,10 @@ class GPUModelRunner(
             if isinstance(module, MoERunner) and isinstance(module.router, BaseRouter):
                 layer_id = module.layer_id
 
-        bind_routing_capture_to_model(self.model)
+                def _capture_fn(topk_ids, _layer_id=layer_id, _capturer=capturer):
+                    _capturer.capture(_layer_id, topk_ids)
+
+                module.router.set_capture_fn(_capture_fn)
 
     def may_add_encoder_only_layers_to_kv_cache_config(self) -> None:
         """

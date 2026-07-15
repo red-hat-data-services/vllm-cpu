@@ -26,10 +26,6 @@ import torch
 import torch.distributed as dist
 
 from vllm.triton_utils import tl, triton
-from vllm.v1.worker.workspace import (
-    current_workspace_manager,
-    is_workspace_manager_initialized,
-)
 
 if TYPE_CHECKING:
     from vllm.distributed.parallel_state import GroupCoordinator

@@ -208,41 +208,6 @@ def _apply_pdl(mod, enable: bool = True) -> None:
         logger.warning_once("Failed to set DeepGEMM PDL on %s: %s", mod_name, e)
 
 
-def _import_deep_gemm():
-    """Import the deep_gemm module.
-
-    Prefers an externally installed ``deep_gemm`` package (so users can
-    pin a specific version), then falls back to the vendored copy bundled
-    in the vLLM wheel.
-
-    Returns ``None`` when neither source is usable.
-    """
-    # 1. Try the external (pip-installed) package first.
-    try:
-        module = importlib.import_module("deep_gemm")
-        logger.debug_once("Imported deep_gemm module from site-packages")
-        return module
-    except ImportError:
-        logger.debug_once(
-            "deep_gemm not found in site-packages, "
-            "trying vendored vllm.third_party.deep_gemm"
-        )
-
-    # 2. Fall back to the vendored copy bundled in the vLLM wheel.
-    try:
-        module = importlib.import_module("vllm.third_party.deep_gemm")
-        logger.debug_once("Imported deep_gemm module from vllm.third_party.deep_gemm")
-        return module
-    except ImportError:
-        logger.debug_once("Vendored deep_gemm not found either")
-    except Exception as e:
-        # The vendored module may raise RuntimeError during _C.init()
-        # if JIT include files are missing (e.g. incomplete wheel).
-        logger.warning_once("Failed to import vendored deep_gemm: %s", e)
-
-    return None
-
-
 def _lazy_init() -> None:
     """Import deep_gemm and resolve symbols on first use."""
     global _cublaslt_gemm_nt_impl

@@ -14,9 +14,6 @@ from vllm.entrypoints.serve.utils.api_utils import (
 from .protocol import PoolingRequest
 from .serving import ServingPooling
 
-from .protocol import PoolingRequest
-from .serving import ServingPooling
-
 router = APIRouter()
 
 

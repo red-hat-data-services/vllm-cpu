@@ -370,8 +370,7 @@ class DelegatingParser(Parser):
         if request.tool_choice and isinstance(request.tool_choice, ToolChoiceFunction):
             return request.tool_choice.name
         if request.tool_choice and isinstance(
-            request.tool_choice,
-            (ToolChoiceFunction, ChatCompletionNamedToolChoiceParam),
+            request.tool_choice, ChatCompletionNamedToolChoiceParam
         ):
             return request.tool_choice.function.name
         raise ValueError("Invalid tool_choice for function name extraction.")

@@ -970,13 +970,6 @@ class EngineArgs:
             "--distributed-timeout-seconds",
             **parallel_kwargs["distributed_timeout_seconds"],
         )
-        parallel_group.add_argument("--numa-bind", **parallel_kwargs["numa_bind"])
-        parallel_group.add_argument(
-            "--numa-bind-nodes", **parallel_kwargs["numa_bind_nodes"]
-        )
-        parallel_group.add_argument(
-            "--numa-bind-cpus", **parallel_kwargs["numa_bind_cpus"]
-        )
         parallel_group.add_argument(
             "--cpu-distributed-timeout-seconds",
             **parallel_kwargs["cpu_distributed_timeout_seconds"],
@@ -2111,12 +2104,6 @@ class EngineArgs:
             parallel_config,
         )
 
-        self._set_default_max_num_seqs_and_batched_tokens_args(
-            usage_context,
-            model_config,
-            parallel_config,
-        )
-
         assert self.max_num_batched_tokens is not None, (
             "max_num_batched_tokens must be set by this point"
         )
@@ -2248,22 +2235,6 @@ class EngineArgs:
             kernel_config.moe_backend = self.moe_backend
         if self.linear_backend != "auto":
             kernel_config.linear_backend = self.linear_backend
-
-        # Transfer top-level ir_op_priority into KernelConfig.ir_op_priority
-        for op_name, op_priority in asdict(self.ir_op_priority).items():
-            # Empty means unset
-            if not op_priority:
-                continue
-
-            # Priority cannot be set 2x for the same op
-            if getattr(kernel_config.ir_op_priority, op_name):
-                raise ValueError(
-                    f"Op priority for {op_name} specified via both ir_op_priority "
-                    f"and KernelConfig.ir_op_priority, only one allowed at a time."
-                )
-
-            # Set the attribute
-            setattr(kernel_config.ir_op_priority, op_name, op_priority)
 
         # Transfer top-level ir_op_priority into KernelConfig.ir_op_priority
         for op_name, op_priority in asdict(self.ir_op_priority).items():

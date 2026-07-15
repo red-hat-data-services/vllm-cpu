@@ -287,11 +287,6 @@ class IPCWeightTransferEngine(
             call ``start_weight_update`` before and ``finish_weight_update``
             after this method.
 
-        .. note::
-            This method calls ``update_weights`` internally. The caller must
-            call ``start_weight_update`` before and ``finish_weight_update``
-            after this method.
-
         Args:
             iterator: Iterator of (name, tensor) pairs. For multi-GPU,
                      each rank should yield the full tensor on its own GPU

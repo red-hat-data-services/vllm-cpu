@@ -507,11 +507,6 @@ class MoRIIOConnectorScheduler:
 
                 block_ids = blocks.get_block_ids()[0]
 
-                peer_zmq = get_peer_zmq_from_request_id(
-                    request.request_id, is_producer=True
-                )
-                remote_host, _, remote_notify_port = parse_moriio_zmq_address(peer_zmq)
-
                 for tp_index in range(self.tp_size):
                     target_port = remote_notify_port + get_port_offset(
                         remote_dp_rank, tp_index

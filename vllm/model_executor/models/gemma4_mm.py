@@ -1656,49 +1656,6 @@ class Gemma4ForConditionalGeneration(
             _process(attn_metadata)
 
     # ------------------------------------------------------------------ #
-    # Bidirectional attention helpers
-    # ------------------------------------------------------------------ #
-
-    def _clear_mm_prefix_for_full_attn_layers(self) -> None:
-        """Clear mm_prefix_range for non-sliding layers.
-
-        Gemma4 with use_bidirectional_attention='vision' applies
-        bidirectional attention only to sliding_attention layers.
-        Full attention layers use plain causal masking.
-
-        Uses _full_attn_layer_idxs (precomputed in __init__) for O(1)
-        lookup instead of per-call regex parsing.
-        """
-        if not self._full_attn_layer_idxs:
-            return
-
-        from vllm.forward_context import get_forward_context
-
-        attn_metadata = get_forward_context().attn_metadata
-        if attn_metadata is None:
-            return
-
-        def _process(metadata_dict: dict) -> None:
-            for layer_name, metadata in metadata_dict.items():
-                if ".layers." not in layer_name:
-                    continue
-                try:
-                    layer_idx = int(layer_name.split(".layers.")[1].split(".")[0])
-                except (ValueError, IndexError):
-                    continue
-                if layer_idx in self._full_attn_layer_idxs:
-                    if hasattr(metadata, "mm_prefix_range"):
-                        metadata.mm_prefix_range = None
-                    if hasattr(metadata, "mm_prefix_range_tensor"):
-                        metadata.mm_prefix_range_tensor = None
-
-        if isinstance(attn_metadata, list):
-            for ub_metadata in attn_metadata:
-                _process(ub_metadata)
-        elif isinstance(attn_metadata, dict):
-            _process(attn_metadata)
-
-    # ------------------------------------------------------------------ #
     # Weight loading
     # ------------------------------------------------------------------ #
 

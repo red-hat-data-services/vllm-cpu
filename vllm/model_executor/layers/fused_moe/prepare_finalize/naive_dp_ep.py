@@ -155,28 +155,6 @@ class MoEPrepareAndFinalizeNaiveDPEPModular(mk.FusedMoEPrepareAndFinalizeModular
                 extra_tensors = []
             extra_tensors.append(local_token_lora_mapping)
 
-        # When LoRA is active, dispatch the per-token LoRA id along with
-        # hidden_states so every rank receives the correct mapping for the
-        # tokens it ends up processing. The punica_wrapper stores indices as
-        # int64 but the moe_lora_align_block_size kernel expects int32, so
-        # pull the pre-cast view from token_mapping_meta.
-        lora_ctx = self._lora_context
-        local_token_lora_mapping = None
-        if lora_ctx is not None:
-            local_token_lora_mapping = (
-                lora_ctx.punica_wrapper.token_mapping_meta.token_lora_mapping[
-                    : a1.shape[0]
-                ]
-            )
-
-        extra_tensors: list[torch.Tensor] | None = None
-        if scales is not None:
-            extra_tensors = list(scales)
-        if local_token_lora_mapping is not None:
-            if extra_tensors is None:
-                extra_tensors = []
-            extra_tensors.append(local_token_lora_mapping)
-
         res = get_ep_group().dispatch(
             a1q,
             topk_weights,

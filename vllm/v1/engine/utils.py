@@ -367,18 +367,6 @@ def _apply_dp_identity_suffix(dp_vllm_config, dp_rank: int) -> None:
         )
 
 
-def _apply_dp_identity_suffix(dp_vllm_config, dp_rank: int) -> None:
-    # Ray actor names (RayExecutorV2) and KV-connector engine_ids must
-    # be unique across sibling DP engines or registration collides.
-    # Use the global DP rank, not a node-local rank, since sibling DP
-    # engines can span multiple nodes.
-    dp_vllm_config.instance_id = f"{dp_vllm_config.instance_id}_dp{dp_rank}"
-    if dp_vllm_config.kv_transfer_config is not None:
-        dp_vllm_config.kv_transfer_config.engine_id = (
-            f"{dp_vllm_config.kv_transfer_config.engine_id}_dp{dp_rank}"
-        )
-
-
 class CoreEngineActorManager:
     """
     Utility class to handle creation, readiness, and shutdown

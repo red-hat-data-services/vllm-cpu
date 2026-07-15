@@ -301,12 +301,6 @@ def get_quant_config(
     quantization_config_file = hf_overrides.get("quantization_config_file", None)
     if quantization_config_file is not None:
         if hasattr(quant_cls, "from_config_file"):
-            if model_config.quantization_config is not None:
-                raise ValueError(
-                    "Setting `quantization_config` for online "
-                    "quantization when the model checkpoint already "
-                    "has a `quantization_config` is not supported"
-                )
             return quant_cls.from_config_file(quantization_config_file)
         else:
             raise NotImplementedError(
@@ -317,12 +311,6 @@ def get_quant_config(
     quantization_config_json = hf_overrides.get("quantization_config_dict_json", None)
     if quantization_config_json is not None:
         if hasattr(quant_cls, "from_config_dict_json"):
-            if model_config.quantization_config is not None:
-                raise ValueError(
-                    "Setting `quantization_config` for online "
-                    "quantization when the model checkpoint already "
-                    "has a `quantization_config` is not supported"
-                )
             return quant_cls.from_config_dict_json(quantization_config_json)
         else:
             raise NotImplementedError(

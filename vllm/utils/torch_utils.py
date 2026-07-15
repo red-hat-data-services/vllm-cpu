@@ -3,7 +3,6 @@
 import contextlib
 import importlib.metadata
 import os
-import platform
 import random
 import threading
 from collections.abc import Callable, Collection

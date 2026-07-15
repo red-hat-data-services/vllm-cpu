@@ -18,7 +18,6 @@ from vllm.model_executor.utils import set_weight_attrs
 from vllm.transformers_utils.configs.kimi_linear import KimiLinearConfig
 from vllm.utils.torch_utils import direct_register_custom_op
 from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata
-from vllm.v1.attention.backends.registry import MambaAttentionBackendEnum
 
 from ...fla.ops.kda import (
     FusedRMSNormGated,

@@ -203,7 +203,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
 
         # Draft tokens propagation - for spec-dec + struct outputs.
         self.draft_tokens_handler = DraftTokensHandler(self.device)
-        self.uniform_decode_query_len = 1 + self.num_speculative_steps
 
         # Pooling models.
         self.is_pooling_model = self.model_config.runner_type == "pooling"

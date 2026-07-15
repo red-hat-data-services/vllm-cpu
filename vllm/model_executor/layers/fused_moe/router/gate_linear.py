@@ -3,9 +3,11 @@
 import torch
 from torch.nn.parameter import Parameter
 
+import vllm._custom_ops as ops
 from vllm.model_executor.custom_op import PluggableLayer
 from vllm.model_executor.layers.linear import ReplicatedLinear
 from vllm.platforms import current_platform
+from vllm.utils.torch_utils import direct_register_custom_op
 
 
 @PluggableLayer.register("gate_linear")
@@ -116,8 +118,6 @@ class GateLinear(ReplicatedLinear):
     def forward(
         self, x: torch.Tensor
     ) -> torch.Tensor | tuple[torch.Tensor, Parameter | None]:
-        import vllm._custom_ops as ops
-
         # Tier 1: DSV3 specialized kernel
         if self.allow_dsv3_router_gemm and x.shape[0] <= self._dsv3_max_batch:
             output = ops.dsv3_router_gemm(
@@ -142,7 +142,7 @@ class GateLinear(ReplicatedLinear):
             output = torch.mm(x, self.weight.T, out_dtype=torch.float32)
             return output, None
 
-        # Tier 3: F.linear (ReplicatedLinear)
+        # Tier 4: F.linear (ReplicatedLinear)
         if self.out_dtype is not None and x.dtype != self.weight.dtype:
             x = x.to(self.weight.dtype)
         output, output_bias = super().forward(x)

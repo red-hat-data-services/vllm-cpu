@@ -430,8 +430,6 @@ class OpenAIServingChat(OpenAIServing):
         num_cached_tokens = None
         tools_streamed = [False] * num_choices
 
-        is_mistral_grammar_path = request._grammar_from_tool_parser
-
         if isinstance(request.tool_choice, ChatCompletionNamedToolChoiceParam):
             tool_choice_function_name = request.tool_choice.function.name
         else:
@@ -1074,7 +1072,6 @@ class OpenAIServingChat(OpenAIServing):
             ),
             prompt_text=prompt_text,
             kv_transfer_params=final_res.kv_transfer_params,
-            prompt_routed_experts=prompt_routed_experts,
         )
 
         # Log complete response if output logging is enabled

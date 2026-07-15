@@ -718,9 +718,6 @@ class CompressedTensorsConfig(QuantizationConfig):
         if self._is_mxfp8(weight_quant):
             return CompressedTensorsW8A8Mxfp8()
 
-        if self._is_mxfp8(weight_quant):
-            return CompressedTensorsW8A8Mxfp8()
-
         if self._is_fp8_w4a8_sm90(weight_quant, input_quant):
             return CompressedTensorsW4A8Fp8(
                 num_bits=weight_quant.num_bits,

@@ -3654,7 +3654,7 @@ class HumanEvalDataset(HuggingFaceDataset):
         **kwargs,
     ) -> list[SampleRequest]:
         output_len = output_len if output_len is not None else self.DEFAULT_OUTPUT_LEN
-        sampled_requests: list[SampleRequest] = []
+        sampled_requests = []
 
         for i, item in enumerate(self.data):
             if len(sampled_requests) >= num_requests:

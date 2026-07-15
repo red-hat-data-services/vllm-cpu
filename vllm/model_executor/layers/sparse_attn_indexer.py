@@ -523,7 +523,7 @@ class SparseAttnIndexer(CustomOp):
     def forward_xpu(
         self,
         hidden_states: torch.Tensor,
-        q_quant: torch.Tensor | tuple[torch.Tensor, torch.Tensor],
+        q_fp8: torch.Tensor,
         k: torch.Tensor,
         weights: torch.Tensor,
     ):

@@ -619,14 +619,6 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
                 retention_interval=self.retention_interval,
             )
 
-        # Attention-group indices (into ``self.attention_groups``) that
-        # contain at least one EAGLE/MTP KV cache group.
-        self.eagle_attn_group_indices: set[int] = {
-            i
-            for i, (_, group_ids, _) in enumerate(self.attention_groups)
-            if any(gid in self.eagle_group_ids for gid in group_ids)
-        }
-
     def find_longest_cache_hit(
         self,
         block_hashes: list[BlockHash],
