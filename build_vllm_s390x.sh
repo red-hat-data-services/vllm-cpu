@@ -205,6 +205,7 @@ git checkout tags/${OUTLINES_CORE_VERSION}
 sed -i 's/version = "0.0.0"/version = "'"${OUTLINES_CORE_VERSION}"'"/' Cargo.toml
 uv pip install maturin
 python -m maturin build --release --out "${WHEEL_DIR}"
+uv pip uninstall -y maturin patchelf
 
 # -------------------------
 # Build wheel for OpenCV-Headless
