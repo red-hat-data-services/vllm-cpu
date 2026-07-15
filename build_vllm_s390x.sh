@@ -15,10 +15,14 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 # install development packages
 microdnf install -y \
     which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
+    gcc-toolset-14 gcc-toolset-14-binutils gcc-toolset-14-libatomic-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool libzstd-devel cmake numpy libsndfile \
     clang clang-devel ninja-build perl-core llvm llvm-devel && \
     microdnf clean all
+
+# Enable gcc-toolset-14 
+source /opt/rh/gcc-toolset-14/enable
 
 ########################################
 # Python 3.12 virtual environment
