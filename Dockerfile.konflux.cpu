@@ -87,7 +87,8 @@ ENV UV_INDEX_STRATEGY=unsafe-best-match
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
     microdnf install --nodocs -y \
-    gcc gcc-gfortran g++ make patch zlib-devel \
+    gcc-toolset-14 gcc-toolset-14-binutils gcc-toolset-14-libatomic-devel \
+    make patch zlib-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool cmake numpy libsndfile \
     clang llvm-devel llvm clang-devel git perl-core \

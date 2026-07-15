@@ -23,6 +23,10 @@ microdnf install -y \
 
 # Enable gcc-toolset-14 
 source /opt/rh/gcc-toolset-14/enable
+export PATH=/opt/rh/gcc-toolset-14/root/usr/bin:$PATH
+export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64:${LD_LIBRARY_PATH}
+export LIBRARY_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64/pkgconfig:${PKG_CONFIG_PATH:-}
 
 ########################################
 # Python 3.12 virtual environment
