@@ -49,12 +49,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         amd-smi-lib \
         hipcc \
         hip-devel \
+        # these -devel packages are required for aiter JIT
+        hipsparse-devel rocthrust-devel hipblas-devel hipblaslt-devel hipsolver-devel \
         # Install libdrm-amdgpu to avoid errors when retrieving device information (amdgpu.ids: No such file or directory)
         libdrm-amdgpu \
         && \
     microdnf clean all
 
-ENV PATH=/opt/rocm/bin:$PATH
+ENV PATH=/opt/rocm/bin:$PATH \
+    ROCM_HOME=/opt/rocm \
+    ROCM_PATH=/opt/rocm
 
 ##################################################################################################
 
@@ -66,8 +70,10 @@ WORKDIR /workspace
 ENV VIRTUAL_ENV=/opt/vllm
 ENV PATH=$VIRTUAL_ENV/bin:$PATH
 
-# Required for triton (gcc, rsync) and audio multimodal support (libsndfile)
-RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs gcc rsync libsndfile && \
+# Required for triton (gcc, rsync), audio multimodal support (libsndfile), aiter (g++)
+RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs \
+    gcc g++ \
+    rsync libsndfile && \
     microdnf clean all
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -81,7 +87,7 @@ ENV HF_HUB_OFFLINE=1 \
     # Silences the HF Tokenizers warning
     TOKENIZERS_PARALLELISM=false  \
     RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
-    VLLM_ROCM_USE_AITER=0 \
+    VLLM_ROCM_USE_AITER=1 \
     HIP_FORCE_DEV_KERNARG=1 \
     OUTLINES_CACHE_DIR=/tmp/outlines \
     NUMBA_CACHE_DIR=/tmp/numba \
