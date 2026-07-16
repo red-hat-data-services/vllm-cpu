@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=rocm/dev-ubuntu-22.04:7.2.3-complete
+ARG BASE_IMAGE=rocm/dev-ubuntu-22.04:7.2.4-complete
 ARG TRITON_BRANCH="0f380657"
 ARG TRITON_REPO="https://github.com/ROCm/triton.git"
 ARG PYTORCH_BRANCH="d0c8b1f3" # release/2.11 as of 6/09
