@@ -81,7 +81,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     export PYARROW_PARALLEL=4 && \
     export ARROW_BUILD_TYPE=release && \
     uv pip install -r requirements-build.txt && \
-    pip wheel . --no-deps -w dist
+    python setup.py build_ext --build-type=$ARROW_BUILD_TYPE --bundle-arrow-cpp bdist_wheel
 
 FROM python-install AS rust
 ENV CARGO_HOME=/root/.cargo

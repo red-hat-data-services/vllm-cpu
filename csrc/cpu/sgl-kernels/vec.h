@@ -11,7 +11,9 @@
 
 #include <ATen/cpu/vec/functional.h>
 #include <ATen/cpu/vec/vec.h>
-
+#if defined(CPU_CAPABILITY_AVX512)
+#include <immintrin.h>
+#endif
 namespace {
 
 using namespace at::vec;
@@ -19,6 +21,15 @@ using namespace at::vec;
 template <typename scalar_t, typename std::enable_if_t<is_reduced_floating_point_v<scalar_t>, int> = 0>
 inline Vectorized<scalar_t> convert_from_float_ext(const Vectorized<float>& a, const Vectorized<float>& b) {
   return at::vec::convert_from_float<scalar_t>(a, b);
+}
+
+template <typename scalar_t>
+inline void convert_from_float_and_store(scalar_t* out, const Vectorized<float>& a) {
+  float out_buffer[at::vec::Vectorized<float>::size()];
+  a.store(out_buffer);
+  for (int i = 0; i < 16; i++) {
+    out[i] = (scalar_t)out_buffer[i];
+  }
 }
 
 // allow f16, bf16
@@ -48,6 +59,11 @@ template <>
 inline Vectorized<at::BFloat16>
 convert_from_float_ext<at::BFloat16>(const Vectorized<float>& a, const Vectorized<float>& b) {
   return (__m512i)(_mm512_cvtne2ps_pbh(__m512(b), __m512(a)));
+}
+
+template <>
+inline void convert_from_float_and_store<at::BFloat16>(at::BFloat16* out, const Vectorized<float>& a) {
+  _mm256_storeu_si256((__m256i*)out, (__m256i)(_mm512_cvtneps_pbh(__m512(a))));
 }
 
 #define CVT_BF16_TO_FP32(a) _mm512_castsi512_ps(_mm512_slli_epi32(_mm512_cvtepu16_epi32(a), 16))
@@ -125,6 +141,72 @@ inline __m512bh CVT_FP8_TO_BF16(__m256i a) {
   return cvt_e4m3_bf16_intrinsic_with_denorm(a);
 #endif
 }
+// faster version of float8_e4m3fn conversion to bfloat16
+//
+// we mapped cuda implementation from below link and vectorized with avx512:
+// https://github.com/thu-pacman/chitu/blob/1ed2078ec26581ebdca05b7306d4385f86edaa7c/csrc/cuda/marlin/marlin_gemm/dequant.h#L387
+//
+inline __attribute__((always_inline)) __m512bh CVT_FP8_TO_BF16_EXT(__m256i a) {
+  const __m512i mask0 = _mm512_set1_epi16(0x80);  // sign bit
+  const __m512i mask1 = _mm512_set1_epi16(0x7F);  // exponent and mantissa
+  const __m512i mask2 = _mm512_set1_epi16(0x4000);
+
+  __m512i x = _mm512_cvtepu8_epi16(a);
+  __m512i vsign = _mm512_and_si512(x, mask0);
+  vsign = _mm512_slli_epi16(vsign, 8);
+
+  __m512i vexp_and_mant = _mm512_and_si512(x, mask1);
+  vexp_and_mant = _mm512_slli_epi16(vexp_and_mant, 4);
+
+  // _MM_TERNLOG_A | _MM_TERNLOG_B | _MM_TERNLOG_C: 0b11111110
+  return (__m512bh)(_mm512_ternarylogic_epi32(vsign, mask2, vexp_and_mant, 0b11111110));
+}
+
+// bias for conversion of fp8 to bf16 1/256 in float32
+#define kFP8_BIAS 0x3b800000
+
+// remove warning: ignoring attributes on template argument ‘__m512bh’ [-Wignored-attributes]
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+
+#define MXFP4_VALUES \
+  -6.0f, -4.0f, -3.0f, -2.0f, -1.5f, -1.0f, -0.5f, -0.0f, 6.0f, 4.0f, 3.0f, 2.0f, 1.5f, 1.0f, 0.5f, 0.0f
+
+// convert 64 mxfp4 to 2x bf16 vectors, expect input 32-way packing
+inline std::tuple<__m512bh, __m512bh> cvt_mxfp4_e2m1_bf16_intrinsic_lut(__m256i a, __m512i s0, __m512i s1) {
+  // LUT
+  const __m512 values = _mm512_set_ps(MXFP4_VALUES);
+  const __m512i lut = (__m512i)(_mm512_cvtne2ps_pbh(values, values));
+
+  const __m512i abs_mask = _mm512_set1_epi16(0x7FFF);
+  const __m512i zero = _mm512_setzero_si512();
+
+  // expand values to 16-bit integers
+  __m512i x0 = _mm512_cvtepu8_epi16(a);
+  __m512i x1 = _mm512_srli_epi32(x0, 4);
+
+  // LUT to convert mxfp4 values to bf16
+  x0 = _mm512_permutexvar_epi16(x0, lut);
+  x1 = _mm512_permutexvar_epi16(x1, lut);
+
+  // check for zeros
+  __mmask32 mask0 = _mm512_cmp_epi16_mask(_mm512_and_si512(x0, abs_mask), zero, _MM_CMPINT_EQ);
+  __mmask32 mask1 = _mm512_cmp_epi16_mask(_mm512_and_si512(x1, abs_mask), zero, _MM_CMPINT_EQ);
+
+  // emulate bf16 mul with scale factor
+  x0 = _mm512_add_epi16(x0, s0);
+  x1 = _mm512_add_epi16(x1, s1);
+
+  // blend with zero
+  x0 = _mm512_mask_blend_epi16(mask0, x0, zero);
+  x1 = _mm512_mask_blend_epi16(mask1, x1, zero);
+
+  return std::make_tuple(__m512bh(x0), __m512bh(x1));
+}
+
+#define CVT_MXFP4_TO_BF16(a, s0, s1) cvt_mxfp4_e2m1_bf16_intrinsic_lut(a, s0, s1)
+
+#pragma GCC diagnostic pop
 
 // faster version of float8_e4m3fn conversion to bfloat16
 //
@@ -230,7 +312,7 @@ quantize_row_int8(uint8_t* __restrict__ Aq, float& As, const scalar_t* __restric
 
   for (int64_t k = 0; k < K; ++k) {
     const float val = static_cast<float>(A[k]) * inv_scale;
-    Aq[k] = (uint8_t)(std::round(val)) + 128;
+    Aq[k] = static_cast<uint8_t>(static_cast<int32_t>(std::round(val)) + 128);
   }
   As = scale;
 }

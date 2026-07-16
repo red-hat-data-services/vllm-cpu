@@ -1,0 +1,108 @@
+# Triggers the release workflow in nm-cicd for every tag matching v*+rhaiv.*,
+# or manually via workflow_dispatch.
+#
+# On tag push, the following defaults are used and cannot be overridden:
+#   - cicd_ref=main
+#   - release=true
+#   - python=3.12
+#   - target_devices="cuda, rocm, tpu, cpu, neuron, hpu"
+#   - model_validation_configs_ref=main
+#
+# Defaults: be sure to update both the `workflow_dispatch` and the `env` block
+
+name: release
+run-name: Release ${{ github.event_name == 'push' && github.ref_name || inputs.tag }} - ${{ github.actor }}
+
+on:
+  push:
+    tags:
+    - 'v*\+rhaiv.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.23.0+rhaiv.0)"
+        type: string
+        required: true
+      cicd_ref:
+        description: "Branch or ref of nm-cicd (e.g. main)"
+        type: string
+        default: "main"
+      python:
+        description: "python version, e.g. 3.12"
+        type: string
+        default: "3.12"
+      target_devices:
+        description: "Comma-separated devices to build (default: all). Supported: cuda, rocm, tpu, cpu, neuron, hpu"
+        type: string
+        default: "cuda, rocm, tpu, cpu, neuron, hpu"
+      release:
+        description: "Publish the built images"
+        type: boolean
+        default: true
+      model_validation_configs_ref:
+        description: "git ref for model-validation-configs"
+        type: string
+        default: "main"
+      testing_options_flags:
+        description: "options for scripts/get_testing_options.py, such as `--tags-include tiny`"
+        type: string
+        required: false
+        default: ""
+
+env:
+  TAG:             ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  CICD_REF:        ${{ github.event_name == 'push' && 'main'          || inputs.cicd_ref }}
+  RELEASE:         ${{ github.event_name == 'push' && 'true'          || inputs.release }}
+  PYTHON:          ${{ inputs.python                                  || '3.12' }}
+  DEVICES:         ${{ inputs.target_devices                          || 'cuda rocm tpu cpu neuron hpu' }}
+  MODEL_VAL_REF:   ${{ inputs.model_validation_configs_ref            || 'main' }}
+  TESTING_OPTIONS: ${{ inputs.testing_options_flags }}
+
+jobs:
+  trigger-release:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Generate GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ secrets.CICD_APP_ID }}
+        private-key: ${{ secrets.CICD_APP_PRIVATE_KEY }}
+        owner: neuralmagic
+
+    - name: Trigger `nm-cicd/release` workflow
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      run: |
+        RUN_URL=$(gh workflow run release.yml \
+          --repo neuralmagic/nm-cicd \
+          --ref "$CICD_REF" \
+          -f repo=${{ github.repository }} \
+          -f tag="$TAG" \
+          -f release="$RELEASE" \
+          -f python="$PYTHON" \
+          -f target_devices="$DEVICES" \
+          -f model_validation_configs_ref="$MODEL_VAL_REF" \
+          -f testing_options_flags="$TESTING_OPTIONS")
+
+        RUN_ID=$(echo "$RUN_URL" | grep -oE '[0-9]+$')
+
+        echo "Triggered run ID: $RUN_ID"
+        echo "Triggered run URL: $RUN_URL"
+
+        cat >> "$GITHUB_STEP_SUMMARY" << EOF
+        ### Triggered nm-cicd release workflow
+        | Parameter                    | Value                                 |
+        | ---------------------------- | --------------------------------------|
+        | Workflow                     | \`neuralmagic/nm-cicd / release.yml\` |
+        | Run URL                      | $RUN_URL                              |
+        | nm-cicd ref                  | \`$CICD_REF\`                         |
+        | repo                         | \`${{ github.repository }}\`          |
+        | tag                          | \`$TAG\`                              |
+        | python                       | \`$PYTHON\`                           |
+        | target_devices               | \`$DEVICES\`                          |
+        | model_validation_configs_ref | \`$MODEL_VAL_REF\`                    |
+        | testing_options_flags        | \`$TESTING_OPTIONS\`                  |
+        | release                      | \`$RELEASE\`                          |
+        EOF
