@@ -36,8 +36,14 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 cd ${CURDIR}
 
 #export PYARROW_VERSION=19.0.1
-git clone --recursive https://github.com/apache/arrow.git -b maint-19.0.1
+git clone --recursive https://github.com/apache/arrow.git
 cd arrow/cpp
+
+# Patch Arrow to disable xsimd includes (avoid version compatibility issues)
+sed -i 's/#include <xsimd\/xsimd.hpp>/\/\/ #include <xsimd\/xsimd.hpp>/' \
+    src/arrow/util/bpacking_simd128_generated_internal.h
+sed -i 's/#include "arrow\/util\/bpacking_simd128_generated_internal.h"/\/\/ #include "arrow\/util\/bpacking_simd128_generated_internal.h"/' \
+    src/arrow/util/bpacking_simd_default.cc
 
 mkdir -p release
 cd release
