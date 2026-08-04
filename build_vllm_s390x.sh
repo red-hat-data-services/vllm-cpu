@@ -92,7 +92,8 @@ pip download torch==2.10.0+cpu \
   -d ${WHEEL_DIR}
 
 # Download setuptools==77.0.3 specifically for vllm
-pip download "setuptools==77.0.3" \
+VLLM_SETUPTOOLS_VERSION="77.0.3"
+pip download "setuptools==${VLLM_SETUPTOOLS_VERSION}" \
   --extra-index-url https://pypi.org/simple \
   -d ${WHEEL_DIR}
 
@@ -253,7 +254,9 @@ cd ${CURDIR}
 
 mkdir -p lapack
 mkdir -p OpenBLAS
-rm -f ${WHEEL_DIR}/setuptools-8[12]*.whl ${WHEEL_DIR}/setuptools-7[0-6]*.whl || true
+
+# Keep only one version of the setuptools package specifically for vllm
+find "${WHEEL_DIR}" -name 'setuptools-*.whl' ! -name "setuptools-${VLLM_SETUPTOOLS_VERSION}*" -delete
 
 uv pip install ${WHEEL_DIR}/*.whl
 
