@@ -42,7 +42,7 @@ fastokens = "0.2.0"
 futures = "0.3.31"
 half = { version = "2.7.1", features = ["bytemuck"] }
 hex = "0.4.3"
-hf-hub = { version = "0.5.0", features = ["tokio"] }
+hf-hub = { version = "1.0.0", features = ["tokio"] }
 http-body = "1.0.1"
 indexmap = "2.13.0"
 itertools = "0.14.0"
