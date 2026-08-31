@@ -5,7 +5,7 @@ ARG BASE_UBI_IMAGE_TAG=9.6-1754584681
 #                       BUILDER  STAGE                        #
 ###############################################################
 
-FROM registry.redhat.io/ubi9/ubi-minimal-pqc@sha256:8a842ac769de709143e4edeace516f2008dfdc431b64670ad3353fa323b44736 AS builder-base
+FROM registry.access.redhat.com/ubi9/ubi-minimal:${BASE_UBI_IMAGE_TAG} AS builder-base
 
 ARG VLLM_VERSION="0.24.0"
 ARG PYTHON_VERSION=3.12
