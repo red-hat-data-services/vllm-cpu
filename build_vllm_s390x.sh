@@ -63,6 +63,7 @@ make install
 cd ../../python
 export PYARROW_PARALLEL=4
 export ARROW_BUILD_TYPE=release
+uv pip install "cython<3.3.0"
 uv pip install -r requirements-build.txt
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 python setup.py build_ext --build-type=$ARROW_BUILD_TYPE --bundle-arrow-cpp --inplace
