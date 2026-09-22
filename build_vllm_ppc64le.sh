@@ -233,7 +233,8 @@ install_torch_family() {
         MAX_JOBS=${MAX_JOBS:-$(nproc)} \
         BUILD_VERSION=${TORCHAUDIO_VERSION} \
         uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
-
+    fi
+    
     cd ${CURDIR}
     rm -rf ${TEMP_BUILD_DIR}
 }
