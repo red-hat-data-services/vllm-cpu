@@ -28,6 +28,28 @@ uv pip install -U pip uv setuptools build wheel cmake auditwheel typer
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
 
+########################################
+# Install Torch packages from DevPI or build from source
+########################################
+
+is_available_on_devpi() {
+    local pkg=$1
+    local version=$2
+
+    echo "Checking DevPI for ${pkg}==${version}..."
+
+    if pip index versions "${pkg}" \
+        --index-url "${IBM_DEVPI_URL}" 2>/dev/null |
+        grep -F "${version}" >/dev/null; then
+
+        echo "${pkg}==${version} is available on DevPI"
+        return 0
+    fi
+
+    echo "${pkg}==${version} is NOT available on DevPI"
+    return 1
+}
+
 : ================== Installing Lapack ==================
 # IMPORTANT: Ensure Lapack is installed in the final image
 cd /root
@@ -111,20 +133,33 @@ install_torch_family() {
     export TORCHVISION_VERSION=${TORCHVISION_VERSION:-$(grep -E '^torchvision==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
     TORCHAUDIO_VERSION=2.9.1
     export TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$(grep -E '^torchaudio==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
-    
     TEMP_BUILD_DIR=$(mktemp -d)
-    cd ${TEMP_BUILD_DIR}
-    
-    : ================== Installing Pytorch ==================
-    export _GLIBCXX_USE_CXX11_ABI=1
-    git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
-    cd pytorch
-    sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
-    uv pip install -r requirements.txt
-    python setup.py develop
-    rm -f dist/torch*+git*whl
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
+    TORCH_FROM_DEVPI=false
+    if is_available_on_devpi "torch" "${TORCH_VERSION}"; then
+        TORCH_FROM_DEVPI=true
+    fi
+    if [[ "${TORCH_FROM_DEVPI}" == "true" ]]; then
+        echo "Installing torch==${TORCH_VERSION} from DevPI"
+
+        uv pip install \
+            --extra-index-url "${IBM_DEVPI_URL}" \
+            --index-strategy unsafe-best-match \
+            --only-binary=:all: \
+            --no-build-isolation \
+            "torch==${TORCH_VERSION}"
+    else
+        echo "Torch wheel not available on DevPI. Building torch==${TORCH_VERSION} from source."
+        cd ${TEMP_BUILD_DIR}
+        : ================== Installing Pytorch ==================
+        export _GLIBCXX_USE_CXX11_ABI=1
+        git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
+        cd pytorch
+        sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
+        uv pip install -r requirements.txt
+        python setup.py develop
+        rm -f dist/torch*+git*whl
+        MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+        PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
 
     cd ${TEMP_BUILD_DIR}
 
@@ -260,7 +295,7 @@ git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VE
 }
 
 install_torch_family
-install_pyarrow
+# install_pyarrow
 install_llvmlite
 install_numba
 install_pillow
