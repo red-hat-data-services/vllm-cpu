@@ -28,6 +28,7 @@ export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
 uv pip install -U pip uv setuptools build wheel cmake auditwheel typer
+uv pip install numpy==2.3.5 pillow==12.2.0 --extra-index-url "$IBM_DEVPI_URL"
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
@@ -139,9 +140,24 @@ install_torch_family() {
     export TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$(grep -E '^torchaudio==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
     TEMP_BUILD_DIR=$(mktemp -d)
     TORCH_FROM_DEVPI=false
+    TORCHVISION_FROM_DEVPI=false
+    TORCHAUDIO_FROM_DEVPI=false
+
     if is_available_on_devpi "torch" "${TORCH_VERSION}"; then
         TORCH_FROM_DEVPI=true
     fi
+
+    if is_available_on_devpi "torchvision" "${TORCHVISION_VERSION}"; then
+        TORCHVISION_FROM_DEVPI=true
+    fi
+
+    if is_available_on_devpi "torchaudio" "${TORCHAUDIO_VERSION}"; then
+        TORCHAUDIO_FROM_DEVPI=true
+    fi
+
+    ########################################
+    # Torch
+    ########################################
     if [[ "${TORCH_FROM_DEVPI}" == "true" ]]; then
         echo "Installing torch==${TORCH_VERSION} from DevPI"
 
@@ -165,26 +181,58 @@ install_torch_family() {
         MAX_JOBS=${MAX_JOBS:-$(nproc)} \
         PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
     fi
-    cd ${TEMP_BUILD_DIR}
 
-    : ================== Installing Torchvision ==================
-    export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
-    git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
-    cd vision
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    BUILD_VERSION=${TORCHVISION_VERSION} \
-    uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+    ########################################
+    # Torchvision
+    ########################################
 
-    cd ${TEMP_BUILD_DIR}
+    if [[ "${TORCHVISION_FROM_DEVPI}" == "true" ]]; then
+        echo "Installing torchvision==${TORCHVISION_VERSION} from DevPI"
 
-    : ================== Installing Torchaudio ==================
-    export BUILD_SOX=1 BUILD_KALDI=1 BUILD_RNNT=1 USE_FFMPEG=0 USE_ROCM=0 USE_CUDA=0
-    export TORCHAUDIO_TEST_ALLOW_SKIP_IF_NO_FFMPEG=1
-    git clone --recursive https://github.com/pytorch/audio.git -b v${TORCHAUDIO_VERSION}
-    cd audio
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    BUILD_VERSION=${TORCHAUDIO_VERSION} \
-    uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+        uv pip install \
+            --extra-index-url "${IBM_DEVPI_URL}" \
+            --index-strategy unsafe-best-match \
+            --only-binary=:all: \
+            --no-build-isolation \
+            "torchvision==${TORCHVISION_VERSION}"
+    else
+        echo "Torchvision wheel not available on DevPI. Building torchvision==${TORCHVISION_VERSION} from source."
+        cd ${TEMP_BUILD_DIR}
+
+        : ================== Installing Torchvision ==================
+        export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
+        git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
+        cd vision
+        MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+        BUILD_VERSION=${TORCHVISION_VERSION} \
+        uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+    fi
+
+
+    ########################################
+    # Torchaudio
+    ########################################
+    if [[ "${TORCHAUDIO_FROM_DEVPI}" == "true" ]]; then
+        echo "Installing torchaudio==${TORCHAUDIO_VERSION} from DevPI"
+
+        uv pip install \
+            --extra-index-url "${IBM_DEVPI_URL}" \
+            --index-strategy unsafe-best-match \
+            --only-binary=:all: \
+            --no-build-isolation \
+            "torchaudio==${TORCHAUDIO_VERSION}"
+    else
+        echo "Torchaudio wheel not available on DevPI. Building torchaudio==${TORCHAUDIO_VERSION} from source."
+        cd ${TEMP_BUILD_DIR}
+
+        : ================== Installing Torchaudio ==================
+        export BUILD_SOX=1 BUILD_KALDI=1 BUILD_RNNT=1 USE_FFMPEG=0 USE_ROCM=0 USE_CUDA=0
+        export TORCHAUDIO_TEST_ALLOW_SKIP_IF_NO_FFMPEG=1
+        git clone --recursive https://github.com/pytorch/audio.git -b v${TORCHAUDIO_VERSION}
+        cd audio
+        MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+        BUILD_VERSION=${TORCHAUDIO_VERSION} \
+        uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
 
     cd ${CURDIR}
     rm -rf ${TEMP_BUILD_DIR}
@@ -302,7 +350,7 @@ install_torch_family
 # install_pyarrow
 install_llvmlite
 install_numba
-install_pillow
+# install_pillow
 install_pyzmq
 install_xgrammar
 install_opencv
