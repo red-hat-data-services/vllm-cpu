@@ -160,7 +160,7 @@ install_torch_family() {
         rm -f dist/torch*+git*whl
         MAX_JOBS=${MAX_JOBS:-$(nproc)} \
         PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
-
+    fi
     cd ${TEMP_BUILD_DIR}
 
     : ================== Installing Torchvision ==================
