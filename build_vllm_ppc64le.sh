@@ -4,6 +4,10 @@ set -eoux pipefail
 # assume we are in vLLM's repo root
 CURDIR=$(pwd)
 
+# DevPI configuration
+IBM_DEVPI_URL=${IBM_DEVPI_URL:-"https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/"}
+export IBM_DEVPI_URL
+
 # install development packages
 rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 microdnf install -y \
