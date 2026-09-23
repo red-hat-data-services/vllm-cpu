@@ -63,6 +63,7 @@ make install
 cd ../../python
 export PYARROW_PARALLEL=4
 export ARROW_BUILD_TYPE=release
+uv pip install "cython<3.3.0"
 uv pip install -r requirements-build.txt
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 python setup.py build_ext --build-type=$ARROW_BUILD_TYPE --bundle-arrow-cpp --inplace
@@ -90,7 +91,9 @@ pip download torch==2.10.0+cpu \
   -d ${WHEEL_DIR}
 
 # Download setuptools in the version range required by vllm (>=77.0.3,<81.0.0)
-pip download "setuptools>=77.0.3,<81.0.0" \
+# the latest 80.x version in the range is 80.10.2, so let's pin it
+VLLM_SETUPTOOLS_VERSION="80.10.2"
+pip download "setuptools==${VLLM_SETUPTOOLS_VERSION}" \
   --extra-index-url https://pypi.org/simple \
   -d ${WHEEL_DIR}
 
@@ -253,7 +256,9 @@ cd ${CURDIR}
 
 mkdir -p lapack
 mkdir -p OpenBLAS
-rm -f ${WHEEL_DIR}/setuptools-8[12]*.whl ${WHEEL_DIR}/setuptools-7[0-6]*.whl || true
+
+# Keep only one version of the setuptools package specifically for vllm
+find "${WHEEL_DIR}" -name 'setuptools-*.whl' ! -name "setuptools-${VLLM_SETUPTOOLS_VERSION}*" -delete
 
 uv pip install ${WHEEL_DIR}/*.whl
 
