@@ -20,7 +20,7 @@
 #
 
 ######################### COMMON BASE IMAGE #########################
-FROM ubuntu:22.04 AS base-common
+FROM ubuntu:26.04 AS base-common
 
 WORKDIR /workspace
 
@@ -88,7 +88,7 @@ RUN echo 'ulimit -c 0' >> ~/.bashrc
 # Build the Rust frontend (`vllm-rs`) in a dedicated stage so the wheel build
 # stage doesn't need the rust toolchain or protoc. This stage runs in parallel
 # with the main vllm-build stage.
-FROM ubuntu:22.04 AS rust-build
+FROM ubuntu:26.04 AS rust-build
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -y \
