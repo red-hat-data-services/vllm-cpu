@@ -114,12 +114,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     fi; \
     if [[ $(uname -m) == "ppc64le" ]]; then \
     # system dependencies needed at runtime for ppc64le; \
+    rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
     microdnf install --nodocs -y \
     libomp tar findutils openssl libicu \
     pkgconfig gcc-toolset-14 libsndfile \
     libtiff libjpeg openjpeg2 zlib \
     freetype lcms2 libwebp tcl tk utf8proc \
-    harfbuzz fribidi libxcb \
+    harfbuzz fribidi libxcb libimagequant gperftools-libs \
     python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip \
     && microdnf update -y && microdnf clean all; \
     python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
@@ -129,6 +130,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --no-cache cmake; \
     cmake --install /lapack/build; \
     uv pip uninstall cmake; \
+    cp -a /tmp/usr-local/lib64/* /usr/local/lib64/; \
+    ldconfig; \
     fi'
 
 # The `lscpu` command was added as a requirement in part of https://github.com/vllm-project/vllm/pull/21032, so installing it.
@@ -142,6 +145,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     # --offline will ensure wheels are picked from uv cache and nothing is pulled from pypi/built from source
     # vllm wheel should be present in /wheelsdir/ ( at least for ppc64le - and transitive dependencies in uv cache )
     HOME=/root uv pip install /wheelsdir/*.whl --offline
+
+ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
 WORKDIR /home/vllm
 
