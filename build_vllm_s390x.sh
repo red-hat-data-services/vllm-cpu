@@ -99,6 +99,7 @@ pip download torch==2.10.0+cpu \
   -d ${WHEEL_DIR}
 
 # Download setuptools in the version range required by vllm (>=77.0.3,<81.0.0)
+# the latest 80.x version in the range is 80.10.2, so let's pin it
 VLLM_SETUPTOOLS_VERSION="80.10.2"
 pip download "setuptools==${VLLM_SETUPTOOLS_VERSION}" \
   --extra-index-url https://pypi.org/simple \
@@ -263,7 +264,7 @@ cd ${CURDIR}
 
 mkdir -p lapack
 mkdir -p OpenBLAS
-#rm -f ${WHEEL_DIR}/setuptools-8[12]*.whl ${WHEEL_DIR}/setuptools-7[0-6]*.whl || true
+
 SETUPTOOLS_WHEEL="${WHEEL_DIR}/setuptools-80.10.2-py3-none-any.whl"
 
 find "${WHEEL_DIR}" -maxdepth 1 -type f -name 'setuptools-*.whl' \
@@ -271,7 +272,6 @@ find "${WHEEL_DIR}" -maxdepth 1 -type f -name 'setuptools-*.whl' \
     -delete
 
 test -f "${SETUPTOOLS_WHEEL}"
-
 
 uv pip install ${WHEEL_DIR}/*.whl
 
