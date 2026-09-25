@@ -3,6 +3,11 @@ set -eoux pipefail
 
 # assume we are in vLLM's repo root
 CURDIR=$(pwd)
+mkdir -p "${WHEEL_DIR}"
+
+# DevPI configuration
+IBM_DEVPI_URL=${IBM_DEVPI_URL:-"https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/"}
+export IBM_DEVPI_URL
 
 # install development packages
 rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
@@ -24,9 +29,40 @@ export LLVM_CONFIG=/usr/lib64/llvm15/bin/llvm-config;
 export CMAKE_ARGS="-DPython3_EXECUTABLE=python"
 
 uv pip install -U pip uv setuptools build wheel cmake auditwheel typer
+pip download \
+    --index-url "${IBM_DEVPI_URL}" \
+    --only-binary=:all: \
+    --no-deps \
+    numpy==2.2.6 \
+    pillow==12.2.0 \
+    -d "${WHEEL_DIR}"
+uv pip install numpy==2.2.6 pillow==12.2.0 --extra-index-url "$IBM_DEVPI_URL"
+
 
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
+
+########################################
+# Install Torch packages from DevPI or build from source
+########################################
+
+is_available_on_devpi() {
+    local pkg=$1
+    local version=$2
+
+    echo "Checking DevPI for ${pkg}==${version}..."
+
+    if pip index versions "${pkg}" \
+        --index-url "${IBM_DEVPI_URL}" 2>/dev/null |
+        grep -F "${version}" >/dev/null; then
+
+        echo "${pkg}==${version} is available on DevPI"
+        return 0
+    fi
+
+    echo "${pkg}==${version} is NOT available on DevPI"
+    return 1
+}
 
 : ================== Installing Lapack ==================
 # IMPORTANT: Ensure Lapack is installed in the final image
@@ -58,6 +94,33 @@ make -j${MAX_JOBS} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS
 # set path for openblas
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/OpenBLAS/lib/:/usr/local/lib64:/usr/local/lib
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
+
+########################################
+# PROTOBUF
+########################################
+cd /root
+git clone https://github.com/protocolbuffers/protobuf.git
+cd protobuf
+git checkout v25.8
+git submodule update --init --recursive
+mkdir build && cd build
+
+cmake .. \
+  -DCMAKE_BUILD_TYPE=Release \
+  -Dprotobuf_BUILD_TESTS=OFF \
+  -Dprotobuf_BUILD_SHARED_LIBS=ON \
+  -Dprotobuf_ABSL_PROVIDER=module \
+  -DABSL_ENABLE_INSTALL=OFF \
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  -DCMAKE_CXX_FLAGS="-O2 -fPIC -mcmodel=medium" \
+  -DCMAKE_INSTALL_PREFIX=/usr/local
+
+make -j$(nproc)
+make install
+ldconfig
+
+export CMAKE_PREFIX_PATH=/usr/local:${CMAKE_PREFIX_PATH:-}
+export LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:${LD_LIBRARY_PATH:-}
 
 cd ${CURDIR}
 
@@ -111,41 +174,101 @@ install_torch_family() {
     export TORCHVISION_VERSION=${TORCHVISION_VERSION:-$(grep -E '^torchvision==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
     TORCHAUDIO_VERSION=2.9.1
     export TORCHAUDIO_VERSION=${TORCHAUDIO_VERSION:-$(grep -E '^torchaudio==.+==\s*\"ppc64le\"' requirements/cpu.txt | grep -Eo '\b[0-9\.]+\b')}
-    
     TEMP_BUILD_DIR=$(mktemp -d)
-    cd ${TEMP_BUILD_DIR}
-    
-    : ================== Installing Pytorch ==================
-    export _GLIBCXX_USE_CXX11_ABI=1
-    git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
-    cd pytorch
-    sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
-    uv pip install -r requirements.txt
-    python setup.py develop
-    rm -f dist/torch*+git*whl
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
+    TORCH_FROM_DEVPI=false
+    TORCHVISION_FROM_DEVPI=false
+    TORCHAUDIO_FROM_DEVPI=false
 
-    cd ${TEMP_BUILD_DIR}
+    if is_available_on_devpi "torch" "${TORCH_VERSION}"; then
+        TORCH_FROM_DEVPI=true
+    fi
 
-    : ================== Installing Torchvision ==================
-    export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
-    git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
-    cd vision
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    BUILD_VERSION=${TORCHVISION_VERSION} \
-    uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+    if is_available_on_devpi "torchvision" "${TORCHVISION_VERSION}"; then
+        TORCHVISION_FROM_DEVPI=true
+    fi
 
-    cd ${TEMP_BUILD_DIR}
+    if is_available_on_devpi "torchaudio" "${TORCHAUDIO_VERSION}"; then
+        TORCHAUDIO_FROM_DEVPI=true
+    fi
 
-    : ================== Installing Torchaudio ==================
-    export BUILD_SOX=1 BUILD_KALDI=1 BUILD_RNNT=1 USE_FFMPEG=0 USE_ROCM=0 USE_CUDA=0
-    export TORCHAUDIO_TEST_ALLOW_SKIP_IF_NO_FFMPEG=1
-    git clone --recursive https://github.com/pytorch/audio.git -b v${TORCHAUDIO_VERSION}
-    cd audio
-    MAX_JOBS=${MAX_JOBS:-$(nproc)} \
-    BUILD_VERSION=${TORCHAUDIO_VERSION} \
-    uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+    ########################################
+    # Torch
+    ########################################
+    if [[ "${TORCH_FROM_DEVPI}" == "true" ]]; then
+        echo "Installing torch==${TORCH_VERSION} from DevPI"
+        pip download \
+            --index-url "${IBM_DEVPI_URL}" \
+            --only-binary=:all: \
+            --no-deps \
+            "torch==${TORCH_VERSION}" \
+            -d "${WHEEL_DIR}"
+    else
+        echo "Torch wheel not available on DevPI. Building torch==${TORCH_VERSION} from source."
+        cd ${TEMP_BUILD_DIR}
+        : ================== Installing Pytorch ==================
+        export _GLIBCXX_USE_CXX11_ABI=1
+        git clone --recursive https://github.com/pytorch/pytorch.git -b v${TORCH_VERSION}
+        cd pytorch
+        sed -i '/lintrunner ;/s/$/ and platform_machine != "ppc64le"/' requirements.txt
+        uv pip install -r requirements.txt
+        python setup.py develop
+        rm -f dist/torch*+git*whl
+        MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+        PYTORCH_BUILD_VERSION=${TORCH_VERSION} PYTORCH_BUILD_NUMBER=1 uv build --wheel --out-dir ${WHEEL_DIR}
+    fi
+
+    ########################################
+    # Torchvision
+    ########################################
+
+    if [[ "${TORCHVISION_FROM_DEVPI}" == "true" ]]; then
+        echo "Installing torchvision==${TORCHVISION_VERSION} from DevPI"
+
+            pip download \
+                --index-url "${IBM_DEVPI_URL}" \
+                --only-binary=:all: \
+                --no-deps \
+                "torchvision==${TORCHVISION_VERSION}" \
+                -d "${WHEEL_DIR}"
+    else
+        echo "Torchvision wheel not available on DevPI. Building torchvision==${TORCHVISION_VERSION} from source."
+        cd ${TEMP_BUILD_DIR}
+
+        : ================== Installing Torchvision ==================
+        export TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_FFMPEG=0
+        git clone --recursive https://github.com/pytorch/vision.git -b v${TORCHVISION_VERSION}
+        cd vision
+        MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+        BUILD_VERSION=${TORCHVISION_VERSION} \
+        uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+    fi
+
+
+    ########################################
+    # Torchaudio
+    ########################################
+    if [[ "${TORCHAUDIO_FROM_DEVPI}" == "true" ]]; then
+        echo "Installing torchaudio==${TORCHAUDIO_VERSION} from DevPI"
+
+        pip download \
+            --index-url "${IBM_DEVPI_URL}" \
+            --only-binary=:all: \
+            --no-deps \
+            "torchaudio==${TORCHAUDIO_VERSION}" \
+            -d "${WHEEL_DIR}"
+    else
+        echo "Torchaudio wheel not available on DevPI. Building torchaudio==${TORCHAUDIO_VERSION} from source."
+        cd ${TEMP_BUILD_DIR}
+
+        : ================== Installing Torchaudio ==================
+        export BUILD_SOX=1 BUILD_KALDI=1 BUILD_RNNT=1 USE_FFMPEG=0 USE_ROCM=0 USE_CUDA=0
+        export TORCHAUDIO_TEST_ALLOW_SKIP_IF_NO_FFMPEG=1
+        git clone --recursive https://github.com/pytorch/audio.git -b v${TORCHAUDIO_VERSION}
+        cd audio
+        MAX_JOBS=${MAX_JOBS:-$(nproc)} \
+        BUILD_VERSION=${TORCHAUDIO_VERSION} \
+        uv build --wheel --out-dir ${WHEEL_DIR} --no-build-isolation
+    fi
 
     cd ${CURDIR}
     rm -rf ${TEMP_BUILD_DIR}
@@ -198,7 +321,10 @@ install_numba() {
     if ! grep '#include "dynamic_annotations.h"' numba/_dispatcher.cpp; then
         sed -i '/#include "internal\/pycore_atomic.h"/i\#include "dynamic_annotations.h"' numba/_dispatcher.cpp;
     fi
-    uv build --wheel --out-dir ${WHEEL_DIR}
+    NUMBA_WHEEL_DIR=$(mktemp -d)
+    uv build --wheel --out-dir ${NUMBA_WHEEL_DIR}
+    mv ${NUMBA_WHEEL_DIR}/numba*.whl ${WHEEL_DIR}
+    rm -rf ${NUMBA_WHEEL_DIR}
 
     cd ${CURDIR}
     rm -rf ${TEMP_BUILD_DIR}
@@ -242,28 +368,29 @@ install_xgrammar() {
     git clone --recursive https://github.com/mlc-ai/xgrammar -b v${XGRAMMAR_VERSION}
     cd xgrammar
     cp cmake/config.cmake .
-    uv build --wheel --out-dir ${WHEEL_DIR}
+    XGRAMMAR_WHEEL_DIR=$(mktemp -d)
+    uv build --wheel --out-dir ${XGRAMMAR_WHEEL_DIR}
+    mv ${XGRAMMAR_WHEEL_DIR}/xgrammar*.whl ${WHEEL_DIR}
+    rm -rf ${XGRAMMAR_WHEEL_DIR}
     microdnf remove gcc-toolset-13 -y
 }
 
 install_opencv() {
+export OPENCV_VERSION=${OPENCV_VERSION:-4.13.0.92}
+pip download \
+    --index-url "${IBM_DEVPI_URL}" \
+    --only-binary=:all: \
+    --no-deps \
+    "opencv-python-headless==${OPENCV_VERSION}" \
+    -d "${WHEEL_DIR}"
 
-export OPENCV_VERSION=92
-
-export ENABLE_HEADLESS=1
-git clone --recursive https://github.com/opencv/opencv-python.git -b ${OPENCV_VERSION} && \
-    cd opencv-python && \
-    if  [[ ${OPENCV_VERSION} == "92" ]]; then sed -i 's/__ARCH_PWR10__/__ARCH_PWR10__)/' opencv/modules/core/include/opencv2/core/vsx_utils.hpp; fi && \
-    sed -i -E -e 's/"setuptools.+",/"setuptools",/g' pyproject.toml && \
-    #python -m build --wheel --installer=uv --outdir ${WHEEL_DIR}
-    uv build --wheel --out-dir ${WHEEL_DIR}
 }
 
 install_torch_family
-install_pyarrow
+# install_pyarrow
 install_llvmlite
 install_numba
-install_pillow
+# install_pillow
 install_pyzmq
 install_xgrammar
 install_opencv
