@@ -16,12 +16,18 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 # install development packages
 microdnf install -y \
     which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
+    gcc-toolset-14 gcc-toolset-14-binutils gcc-toolset-14-libatomic-devel \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool libzstd-devel cmake numpy libsndfile \
     clang clang-devel ninja-build perl-core llvm llvm-devel && \
     microdnf clean all
 
-pip install --no-cache -U pip setuptools wheel && \
+# Enable gcc-toolset-14
+source /opt/rh/gcc-toolset-14/enable
+export LIBRARY_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64
+export PKG_CONFIG_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64/pkgconfig:${PKG_CONFIG_PATH:-}
+
+pip install --no-cache -U pip "setuptools==80.10.2" wheel && \
 pip install --no-cache -U uv
 
 curl https://sh.rustup.rs -sSf | sh -s -- -y && \
@@ -257,8 +263,13 @@ cd ${CURDIR}
 mkdir -p lapack
 mkdir -p OpenBLAS
 
-# Keep only one version of the setuptools package specifically for vllm
-find "${WHEEL_DIR}" -name 'setuptools-*.whl' ! -name "setuptools-${VLLM_SETUPTOOLS_VERSION}*" -delete
+SETUPTOOLS_WHEEL="${WHEEL_DIR}/setuptools-80.10.2-py3-none-any.whl"
+
+find "${WHEEL_DIR}" -maxdepth 1 -type f -name 'setuptools-*.whl' \
+    ! -path "${SETUPTOOLS_WHEEL}" \
+    -delete
+
+test -f "${SETUPTOOLS_WHEEL}"
 
 uv pip install ${WHEEL_DIR}/*.whl
 
