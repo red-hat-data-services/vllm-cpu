@@ -94,35 +94,18 @@ make -j${MAX_JOBS} TARGET=POWER9 BINARY=64 USE_OPENMP=1 USE_THREAD=1 NUM_THREADS
 # set path for openblas
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/OpenBLAS/lib/:/usr/local/lib64:/usr/local/lib
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
+cd ${CURDIR}
 
 ########################################
 # PROTOBUF
 ########################################
-cd /root
-git clone https://github.com/protocolbuffers/protobuf.git
-cd protobuf
-git checkout v25.8
-git submodule update --init --recursive
-mkdir build && cd build
-
-cmake .. \
-  -DCMAKE_BUILD_TYPE=Release \
-  -Dprotobuf_BUILD_TESTS=OFF \
-  -Dprotobuf_BUILD_SHARED_LIBS=ON \
-  -Dprotobuf_ABSL_PROVIDER=module \
-  -DABSL_ENABLE_INSTALL=OFF \
-  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-  -DCMAKE_CXX_FLAGS="-O2 -fPIC -mcmodel=medium" \
-  -DCMAKE_INSTALL_PREFIX=/usr/local
-
-make -j$(nproc)
-make install
-ldconfig
-
-export CMAKE_PREFIX_PATH=/usr/local:${CMAKE_PREFIX_PATH:-}
-export LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:${LD_LIBRARY_PATH:-}
-
-cd ${CURDIR}
+pip download \
+    --index-url "${IBM_DEVPI_URL}" \
+    --only-binary=:all: \
+    --no-deps \
+    libprotobuf==25.8 \
+    -d "${WHEEL_DIR}"
+uv pip install libprotobuf==25.8 --extra-index-url "$IBM_DEVPI_URL"
 
 install_pillow() {
     cd ${CURDIR}
