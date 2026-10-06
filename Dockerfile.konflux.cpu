@@ -50,7 +50,7 @@ COPY . .
 # Build and install vllm (run this on both s390x as well as ppc64le)
 # build & install vLLM so that all transitive dependencies are build/downloaded into the uv cache
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install 'setuptools==77.0.3' && \
+    uv pip install 'setuptools==78.1.1' && \
     if [ "$(uname -m)" = "ppc64le" ] || [ "$(uname -m)" = "s390x" ]; then source /opt/rh/gcc-toolset-14/enable; fi && \
     SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" uv build \
       --wheel --out-dir ${WHEEL_DIR} --no-build-isolation && \
