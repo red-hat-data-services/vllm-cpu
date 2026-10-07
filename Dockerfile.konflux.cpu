@@ -137,8 +137,10 @@ RUN microdnf install --nodocs -y util-linux && \
 # Use builder venv in final stage instead of wheel reinstallation
 COPY --from=builder-base /opt/vllm /opt/vllm
 
-# Remove maturin from the runtime image
-RUN rm -f /opt/vllm/bin/maturin
+# Remove build-only tools that contain non-FIPS-certified bundled crypto
+RUN rm -f /opt/vllm/bin/maturin \
+          /opt/vllm/bin/uv \
+          /opt/vllm/bin/uvx
 
 ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
