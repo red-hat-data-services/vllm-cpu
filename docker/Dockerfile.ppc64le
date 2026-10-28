@@ -1,4 +1,4 @@
-ARG BASE_UBI_IMAGE_TAG=9.8-1790754119
+ARG BASE_UBI_IMAGE_TAG=9.8-1793050346
 
 ###############################################################
 # Stage to build openblas
