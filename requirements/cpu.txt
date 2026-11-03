@@ -21,6 +21,7 @@ torchaudio==2.7.0; platform_machine == "ppc64le"
 torchvision; platform_machine != "ppc64le" and platform_machine != "s390x"
 torchvision==0.22.0; platform_machine == "ppc64le"
 datasets # for benchmark scripts
+pandas>=2.3,<3 # pin to 2.x: pandas 3.1.0 (transitive via datasets) fails to compile from source on s390x/ppc64le
 
 # Intel Extension for PyTorch, only for x86_64 CPUs
 intel-openmp==2024.2.1; platform_machine == "x86_64"
