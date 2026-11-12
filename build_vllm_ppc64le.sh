@@ -129,7 +129,7 @@ export LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:${LD_LIBRARY_PATH:-}
 ########################################
 # DevPI Packages
 ########################################
-uv pip install numpy==2.3.5 pillow==12.2.0 --extra-index-url "$IBM_DEVPI_URL"
+uv pip install numpy==2.3.5 pillow>=13.0.0 --extra-index-url "$IBM_DEVPI_URL"
 install_packages() {
     try_install_from_devpi "opencv-python-headless==${OPENCV_VERSION}"
     try_install_from_devpi "torch==${TORCH_VERSION}"
