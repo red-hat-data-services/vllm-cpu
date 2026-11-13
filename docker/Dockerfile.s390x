@@ -53,6 +53,7 @@ FROM python-install AS pyarrow
 WORKDIR /tmp
 RUN --mount=type=cache,target=/root/.cache/uv \
     git clone https://github.com/apache/arrow.git  -b maint-19.0.1 && \
+    python -c 'from pathlib import Path; p=Path("arrow/python/pyarrow/table.pxi"); s=p.read_text(); old="    with nogil:\n        options.unify_schemas = promote_options != \"none\"\n"; new="    options.unify_schemas = promote_options != \"none\"\n    with nogil:\n"; assert s.count(old)==1; p.write_text(s.replace(old,new))' && \
     cd arrow/cpp && \
     mkdir release && cd release && \
     cmake -DCMAKE_BUILD_TYPE=Release \
@@ -216,9 +217,9 @@ ENV PATH="$CARGO_HOME/bin:$RUSTUP_HOME/bin:$PATH"
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,from=rust,source=/root/.cargo,target=/root/.cargo,rw \
     --mount=type=bind,from=rust,source=/root/.rustup,target=/root/.rustup,rw \
-    git clone https://github.com/guidance-ai/llguidance.git && \
+    git clone https://github.com/r3hankhan123/llguidance.git && \
     cd llguidance && \
-    git checkout s390x-fix-v2  && \
+    git checkout s390x-fix-v2 && \
     uv pip install maturin && \
     python -m maturin build --release --out dist --compatibility linux
 
@@ -264,7 +265,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
      NUMBA_WHL_FILE=$(ls /tmp/numba-wheels/*.whl) && \
      OPENCV_WHL_FILE=$(ls /tmp/opencv-wheels/*.whl) && \
      GUIDANCE_WHL_FILE=$(ls /tmp/guidance-wheels/*.whl) && \
-     uv pip install -v \    
+     CXXFLAGS="-fno-lto" uv pip install -v \
         $ARROW_WHL_FILE \
         $VISION_WHL_FILE \
         $HF_XET_WHL_FILE \
