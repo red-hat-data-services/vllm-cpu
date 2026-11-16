@@ -1,5 +1,9 @@
 # Base UBI image
-ARG BASE_UBI_IMAGE_TAG=9.8-1790754119
+
+
+
+ARG BASE_UBI_IMAGE_TAG=9.8-1793578971
+
 
 ###############################################################
 #                       BUILDER  STAGE                        #
@@ -81,7 +85,7 @@ ENV PKG_CONFIG_PATH=${PCP_DIR}/usr/lib64/pkgconfig:/usr/local/lib/pkgconfig/
 ENV C_INCLUDE_PATH="/usr/local/include:$C_INCLUDE_PATH"
 ENV LD_LIBRARY_PATH=${PCP_DIR}/usr/lib64:${PCP_DIR}/usr/lib:${VIRTUAL_ENV}/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/lib:$LD_LIBRARY_PATH:/usr/local/lib64:/usr/lib64:/usr/lib
 ENV UV_LINK_MODE=copy
-ARG VLLM_VERSION="0.21.0"
+ARG VLLM_VERSION="0.24.0"
 ENV UV_EXTRA_INDEX_URL=https://wheels.developerfirst.ibm.com/ppc64le/linux/+simple/
 ENV UV_INDEX_STRATEGY=unsafe-best-match
 
@@ -98,7 +102,6 @@ RUN if [ "$(uname -m)" = "s390x" ]; then \
 
 RUN if [ "$(uname -m)" = "s390x" ]; then \
     python${PYTHON_VERSION} -m venv ${VIRTUAL_ENV}; \
-    python -m pip install -U pip uv --no-cache; \
     fi
 ###################################
 # P system packages install block #
@@ -118,7 +121,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
     microdnf install --nodocs -y \
     libomp tar findutils openssl libicu \
-    pkgconfig gcc-toolset-14 libsndfile \
+    pkgconfig gcc-toolset-14 gcc-toolset-14-libatomic-devel libsndfile \
     libtiff libjpeg openjpeg2 libimagequant zlib gperftools-libs \
     freetype lcms2 libwebp tcl tk utf8proc \
     harfbuzz fribidi libxcb numactl numactl-devel openmpi openmpi-devel zeromq-devel openblas openblas-devel \
@@ -137,8 +140,12 @@ RUN microdnf install --nodocs -y util-linux && \
 # Use builder venv in final stage instead of wheel reinstallation
 COPY --from=builder-base /opt/vllm /opt/vllm
 
-# Remove maturin from the runtime image
-RUN rm -f /opt/vllm/bin/maturin
+# Remove build-only tools that contain non-FIPS-certified bundled crypto
+RUN rm -f /opt/vllm/bin/maturin \
+          /opt/vllm/bin/uv \
+          /opt/vllm/bin/uvx \
+          /usr/local/bin/uv \
+          /usr/local/bin/uvx
 
 ENV LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
 
