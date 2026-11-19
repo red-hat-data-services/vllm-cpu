@@ -13,9 +13,17 @@ export C_INCLUDE_PATH=${C_INCLUDE_PATH:-/usr/local/include}
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/usr/lib64:/usr/lib}
 
 # install development packages
+# Pin gcc-toolset-15 to el9_8 versions to replicate Nov 6 successful build environment
+# (el9_9 update introduced stricter LTO checking causing C++ ODR violations in xgrammar)
 microdnf install -y \
     which procps findutils tar vim git gcc gcc-gfortran g++ gcc-c++ make patch zlib-devel \
     gcc-toolset-14 gcc-toolset-14-binutils gcc-toolset-14-libatomic-devel \
+    gcc-toolset-15-runtime-15.0-9.el9 \
+    gcc-toolset-15-binutils-2.44-5.el9 \
+    gcc-toolset-15-gcc-15.2.1-7.1.el9_8 \
+    gcc-toolset-15-gcc-c++-15.2.1-7.1.el9_8 \
+    gcc-toolset-15-libatomic-devel-15.2.1-7.1.el9_8 \
+    gcc-toolset-15-libstdc++-devel-15.2.1-7.1.el9_8 \
     libjpeg-turbo-devel libtiff-devel libpng-devel libwebp-devel freetype-devel harfbuzz-devel \
     openssl-devel openblas openblas-devel autoconf automake libtool libzstd-devel cmake numpy libsndfile \
     clang clang-devel ninja-build perl-core llvm llvm-devel && \
