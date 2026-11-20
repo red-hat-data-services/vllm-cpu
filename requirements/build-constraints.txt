@@ -1,0 +1,16 @@
+# Build-time constraints applied to PEP 517 isolated build environments
+# (passed to uv via --build-constraints).
+#
+# xgrammar is built from source on s390x/ppc64le (no prebuilt wheels) and
+# declares a floating build requirement on apache-tvm-ffi (>= 0.1.10).
+# apache-tvm-ffi 0.1.16 bumped its CMake interface from cxx_std_17 to
+# cxx_std_20, so xgrammar's tvm_ffi bindings get compiled as C++20 while
+# the core library is C++17. Combined with xgrammar's -flto=auto -Werror
+# flags, this triggers fatal C++ One Definition Rule violations at LTO
+# link time (std::variant has different definitions in C++17 vs C++20
+# translation units).
+#
+# Note: the pin in requirements/common.txt only constrains the runtime
+# environment; it does NOT reach the isolated build environment, which is
+# why the runtime pin alone did not fix the s390x build.
+apache-tvm-ffi==0.1.15.post2
