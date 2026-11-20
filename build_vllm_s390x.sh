@@ -23,6 +23,11 @@ microdnf install -y \
 
 # Enable gcc-toolset-14 
 source /opt/rh/gcc-toolset-14/enable
+
+# s390x xgrammar workaround
+export CFLAGS="-fno-lto"
+export CXXFLAGS="-Wno-error=odr -fno-lto"
+
 export PATH=/opt/rh/gcc-toolset-14/root/usr/bin:$PATH
 export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64:${LD_LIBRARY_PATH}
 export LIBRARY_PATH=/opt/rh/gcc-toolset-14/root/usr/lib64
@@ -239,4 +244,8 @@ uv pip install ${WHEEL_DIR}/*.whl
 
 export PKG_CONFIG_PATH=$(find / -type d -name "pkgconfig" 2>/dev/null | tr '\n' ':')
 uv pip install "jinja2==3.1.6" "markupsafe>=2.0"
+
+# xgrammar s390x workaround
+export CFLAGS="-fno-lto"
+export CXXFLAGS="-Wno-error=odr -fno-lto"
 uv pip install -r requirements/cpu.txt -r requirements/build/cpu.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
